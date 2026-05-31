@@ -1,0 +1,377 @@
+{
+  "/tmp/pinescript-agents/pinescript-agents-main/.claude/hooks.json": {
+    "mtime": 1773424435.0,
+    "ast_hash": "827444749e514c9eedab9938e93e4760",
+    "semantic_hash": "827444749e514c9eedab9938e93e4760"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/.claude/hooks/after-edit.sh": {
+    "mtime": 1773424435.0,
+    "ast_hash": "5f81fd1f96991cecd541e59f1c553b5c",
+    "semantic_hash": "5f81fd1f96991cecd541e59f1c553b5c"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/.claude/hooks/after-rename.sh": {
+    "mtime": 1773424435.0,
+    "ast_hash": "9a2423f047c011303414e54b0c21f67d",
+    "semantic_hash": "9a2423f047c011303414e54b0c21f67d"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/.claude/hooks/before-delete.sh": {
+    "mtime": 1773424435.0,
+    "ast_hash": "9413778868eb49bbc5057368172f42e3",
+    "semantic_hash": "9413778868eb49bbc5057368172f42e3"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/.claude/hooks/before-write.sh": {
+    "mtime": 1773424435.0,
+    "ast_hash": "059da5cce1b8d8861465c994e157baed",
+    "semantic_hash": "059da5cce1b8d8861465c994e157baed"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/.claude/hooks/startup.sh": {
+    "mtime": 1773424435.0,
+    "ast_hash": "f358de4a55fc49ede9493827532429a7",
+    "semantic_hash": "f358de4a55fc49ede9493827532429a7"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/.claude/hooks/user-prompt-submit.sh": {
+    "mtime": 1773424435.0,
+    "ast_hash": "a55410d66146adaac716eaf80a11fda8",
+    "semantic_hash": "a55410d66146adaac716eaf80a11fda8"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/.claude/protected-paths.json": {
+    "mtime": 1773424435.0,
+    "ast_hash": "62f1c2d5a4ef4cf7534a869f708053c9",
+    "semantic_hash": "62f1c2d5a4ef4cf7534a869f708053c9"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/.claude/statusline.sh": {
+    "mtime": 1773424435.0,
+    "ast_hash": "0ed9204dc66d249d546d54df8f95a2af",
+    "semantic_hash": "0ed9204dc66d249d546d54df8f95a2af"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/analyze-video.sh": {
+    "mtime": 1773424435.0,
+    "ast_hash": "3b07c40a85667ddeff6280c506e6cdcd",
+    "semantic_hash": "3b07c40a85667ddeff6280c506e6cdcd"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/package.json": {
+    "mtime": 1773424435.0,
+    "ast_hash": "5afaed25ecd1290560585d76461c5661",
+    "semantic_hash": "5afaed25ecd1290560585d76461c5661"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/projects/analysis/video_analysis_4c0e6145.json": {
+    "mtime": 1773424435.0,
+    "ast_hash": "7ac14a2e2870f872fefbf11e08612449",
+    "semantic_hash": "7ac14a2e2870f872fefbf11e08612449"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/run_analysis.py": {
+    "mtime": 1773424435.0,
+    "ast_hash": "09ea312a6b5450d29367d69cfa160d88",
+    "semantic_hash": "09ea312a6b5450d29367d69cfa160d88"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/start": {
+    "mtime": 1773424435.0,
+    "ast_hash": "9cd0b1a447bd4914aac0a7ae6be9508e",
+    "semantic_hash": "9cd0b1a447bd4914aac0a7ae6be9508e"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/start.sh": {
+    "mtime": 1773424435.0,
+    "ast_hash": "b4fc437c2300550cba144314b9e90a23",
+    "semantic_hash": "b4fc437c2300550cba144314b9e90a23"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/tools/video-analyzer.py": {
+    "mtime": 1773424435.0,
+    "ast_hash": "f3006eee56a5e8b9340decc00b9ef49c",
+    "semantic_hash": "f3006eee56a5e8b9340decc00b9ef49c"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/.claude/hooks/README.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "fb4a78e0dc1dec7db80e71037175ed44",
+    "semantic_hash": "fb4a78e0dc1dec7db80e71037175ed44"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/.claude/onboarding.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "a6e87ea81bd8a79823fb23dd63f88e8f",
+    "semantic_hash": "a6e87ea81bd8a79823fb23dd63f88e8f"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/.claude/skills/pine-backtester/SKILL.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "b4bea62a4f79c3aa1d1c88ac20e1d806",
+    "semantic_hash": "b4bea62a4f79c3aa1d1c88ac20e1d806"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/.claude/skills/pine-debugger/SKILL.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "a173968d57eac76af0bbb89be03da26a",
+    "semantic_hash": "a173968d57eac76af0bbb89be03da26a"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/.claude/skills/pine-developer/SKILL.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "0dfea68329b520d44ee48bfe163ce6a3",
+    "semantic_hash": "0dfea68329b520d44ee48bfe163ce6a3"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/.claude/skills/pine-manager/SKILL.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "050968893008591fb18621aabb58df24",
+    "semantic_hash": "050968893008591fb18621aabb58df24"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/.claude/skills/pine-optimizer/SKILL.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "aa1af71b155dda9228c074c73dc91a39",
+    "semantic_hash": "aa1af71b155dda9228c074c73dc91a39"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/.claude/skills/pine-publisher/SKILL.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "81b2ac2f177089375ec02b302c32993f",
+    "semantic_hash": "81b2ac2f177089375ec02b302c32993f"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/.claude/skills/pine-visualizer/SKILL.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "c9672a5f22bd5f8959cf87f8decfcedc",
+    "semantic_hash": "c9672a5f22bd5f8959cf87f8decfcedc"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/CHANGELOG.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "2fb93bb8935933123f8d86aba9dba720",
+    "semantic_hash": "2fb93bb8935933123f8d86aba9dba720"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/CLAUDE.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "30b3d681a6a2580b157ffab2d1d6fa41",
+    "semantic_hash": "30b3d681a6a2580b157ffab2d1d6fa41"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/README.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "a08fc3ff5d35934f62dc8792199ff990",
+    "semantic_hash": "a08fc3ff5d35934f62dc8792199ff990"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/agent-documentation-map.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "ee4835b819ba92834a726d35abf33607",
+    "semantic_hash": "ee4835b819ba92834a726d35abf33607"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/comprehensive-scoping-flow.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "af1089a86c6b8ec0e3d0052a097e31b9",
+    "semantic_hash": "af1089a86c6b8ec0e3d0052a097e31b9"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/edge-case-handler.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "11735cba58863197ceeb86e2eebeea52",
+    "semantic_hash": "11735cba58863197ceeb86e2eebeea52"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/README.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "270234485dc0ffbae62e25c6c1588387",
+    "semantic_hash": "270234485dc0ffbae62e25c6c1588387"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/advanced/collections.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "68df23fb43d4c5ac33362ac156f54a9d",
+    "semantic_hash": "68df23fb43d4c5ac33362ac156f54a9d"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/advanced/libraries.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "e678d5c9d0734f99e52e6bc7be14df2f",
+    "semantic_hash": "e678d5c9d0734f99e52e6bc7be14df2f"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/advanced/polylines.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "7593e1e049a8fde80bf8b08fc293ebe9",
+    "semantic_hash": "7593e1e049a8fde80bf8b08fc293ebe9"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/advanced/security.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "17540e791a7e2e98a2cfbb77c0d25c21",
+    "semantic_hash": "17540e791a7e2e98a2cfbb77c0d25c21"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/advanced/type-casting.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "655f598bdf7c57e9dbafea65234111bc",
+    "semantic_hash": "655f598bdf7c57e9dbafea65234111bc"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/built-in-functions.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "c7a488487fd8afe0847d1ba989c53748",
+    "semantic_hash": "c7a488487fd8afe0847d1ba989c53748"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/core-concepts/execution-model.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "4fcba320653ef3668f63d20862f29195",
+    "semantic_hash": "4fcba320653ef3668f63d20862f29195"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/core-concepts/repainting.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "f9200b24db1b855afbe31e0a576e4bcd",
+    "semantic_hash": "f9200b24db1b855afbe31e0a576e4bcd"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/debugging/common-errors.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "14e1ebebad8262157879025ab117f7de",
+    "semantic_hash": "14e1ebebad8262157879025ab117f7de"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/debugging/debugging-tools.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "dad749d10ae4263ddbd4471e01e21f9c",
+    "semantic_hash": "dad749d10ae4263ddbd4471e01e21f9c"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/debugging/edge-cases.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "e16b12e88aa9f6658a3252259b5013bd",
+    "semantic_hash": "e16b12e88aa9f6658a3252259b5013bd"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/debugging/performance.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "299b8fe8309de5a926a712a59159cdfd",
+    "semantic_hash": "299b8fe8309de5a926a712a59159cdfd"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/functions/array-matrix-map/README.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "8c1e19620d218d533d2f3c71c17011eb",
+    "semantic_hash": "8c1e19620d218d533d2f3c71c17011eb"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/functions/drawing/README.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "922f9814b3f0f868f589368852ae39f6",
+    "semantic_hash": "922f9814b3f0f868f589368852ae39f6"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/functions/input/README.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "1251cbf4cd3eda345d3330e3e66a72e3",
+    "semantic_hash": "1251cbf4cd3eda345d3330e3e66a72e3"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/functions/math/README.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "b50d94d5d94ed48aa029dd8cd865b28d",
+    "semantic_hash": "b50d94d5d94ed48aa029dd8cd865b28d"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/functions/request/README.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "323cd9e044fc95ed8bcba6d9d32a1e8f",
+    "semantic_hash": "323cd9e044fc95ed8bcba6d9d32a1e8f"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/functions/strategy/README.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "89d6d39ec26dbcc3823a65cc00ace35d",
+    "semantic_hash": "89d6d39ec26dbcc3823a65cc00ace35d"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/functions/technical/README.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "047f9e95227e8200160544a154e2d6a9",
+    "semantic_hash": "047f9e95227e8200160544a154e2d6a9"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/functions/timeframe/README.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "7cba07b07ade3ba4b8bff56bcba7739f",
+    "semantic_hash": "7cba07b07ade3ba4b8bff56bcba7739f"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/indicators/calculations.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "7c506ee5975d3c0a785b779440e9cdb9",
+    "semantic_hash": "7c506ee5975d3c0a785b779440e9cdb9"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/indicators/plotting.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "c7f9f9ccc228a31015d938e312ae275f",
+    "semantic_hash": "c7f9f9ccc228a31015d938e312ae275f"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/indicators/structure.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "49145c4dc92434f5cf1b0593a833c2c8",
+    "semantic_hash": "49145c4dc92434f5cf1b0593a833c2c8"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/language-reference.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "b3eb9232f9d168ed7f2b8cced79c859c",
+    "semantic_hash": "b3eb9232f9d168ed7f2b8cced79c859c"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/quick-reference/common-patterns.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "b1cee584769700912793393c135de965",
+    "semantic_hash": "b1cee584769700912793393c135de965"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/quick-reference/limitations.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "bddb35a483a1ebcd502b29af09e238ce",
+    "semantic_hash": "bddb35a483a1ebcd502b29af09e238ce"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/quick-reference/syntax-basics.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "e561257d5a2d7706b7debf846a2a10b4",
+    "semantic_hash": "e561257d5a2d7706b7debf846a2a10b4"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/reference-tables/built-in-variables.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "35dc20d5ecda5965c97d77307b2aeba4",
+    "semantic_hash": "35dc20d5ecda5965c97d77307b2aeba4"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/reference-tables/function-index.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "07397cdda073c39a442a2a1487a14472",
+    "semantic_hash": "07397cdda073c39a442a2a1487a14472"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/reference-tables/keywords.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "874de5fe5fedeba71651195f353aa1f7",
+    "semantic_hash": "874de5fe5fedeba71651195f353aa1f7"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/reference-tables/namespaces.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "293571fc68db202f636faa365c930dae",
+    "semantic_hash": "293571fc68db202f636faa365c930dae"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/reference-tables/operators.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "5f25fcd711f7005288d9730cc7efeea2",
+    "semantic_hash": "5f25fcd711f7005288d9730cc7efeea2"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/strategies/structure.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "7d57589c2408793c00cac6a4f063ebe7",
+    "semantic_hash": "7d57589c2408793c00cac6a4f063ebe7"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/visual-components/plots.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "54c2b2bfaf6cf96a44b9f38514fac4bf",
+    "semantic_hash": "54c2b2bfaf6cf96a44b9f38514fac4bf"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/pinescript-v6/visual-components/tables.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "0eb3a936678a7787afe025da35037263",
+    "semantic_hash": "0eb3a936678a7787afe025da35037263"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/project-scoping-flow.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "99fa1a93cd586a68eb811b8f592543de",
+    "semantic_hash": "99fa1a93cd586a68eb811b8f592543de"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/scoping-questions.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "1f6da17badc1bd3629d75d6d9b18eefc",
+    "semantic_hash": "1f6da17badc1bd3629d75d6d9b18eefc"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/tradingview/README.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "865c281572d982fc1ebc46c3cd3e644f",
+    "semantic_hash": "865c281572d982fc1ebc46c3cd3e644f"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/video-analysis-process.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "ca42ba7a9135c88544a274c71aaec319",
+    "semantic_hash": "ca42ba7a9135c88544a274c71aaec319"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/docs/workflows/README.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "1bcf0efddd04c8c01094c434c697392f",
+    "semantic_hash": "1bcf0efddd04c8c01094c434c697392f"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/examples/README.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "b4d65a800e64f5ec102468f8fcbdb7b1",
+    "semantic_hash": "b4d65a800e64f5ec102468f8fcbdb7b1"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/projects/README.md": {
+    "mtime": 1773424435.0,
+    "ast_hash": "c8dd0bac569fd4e5f093c2fab9e7d3b8",
+    "semantic_hash": "c8dd0bac569fd4e5f093c2fab9e7d3b8"
+  },
+  "/tmp/pinescript-agents/pinescript-agents-main/requirements.txt": {
+    "mtime": 1773424435.0,
+    "ast_hash": "251772c48c91acd54a8bc509ac0bf9a0",
+    "semantic_hash": "251772c48c91acd54a8bc509ac0bf9a0"
+  }
+}
