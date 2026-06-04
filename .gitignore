@@ -15,6 +15,9 @@ build/
 .graphify/
 .graphify_*.json
 .graphify_python
+.pinemcp_*.json
+graphify-out/.graphify_detect_pinemcp.json
+graphify-out/.vocab.txt
 docs/superpowers/
 .vscode/
 openspec/
