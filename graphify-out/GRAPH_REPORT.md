@@ -1,67 +1,66 @@
-# Graph Report - .  (2026-05-31)
+# Graph Report - .  (2026-06-04)
 
 ## Corpus Check
-- 75 files · ~126,671 words
+- 414 files · ~130,000 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 324 nodes · 468 edges · 28 communities (15 shown, 13 thin omitted)
-- Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 55 edges (avg confidence: 0.85)
+- 414 nodes · 616 edges · 27 communities (14 shown, 13 thin omitted)
+- Extraction: 89% EXTRACTED · 11% INFERRED · 0% AMBIGUOUS · INFERRED: 65 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
-- [[_COMMUNITY_Agent Orchestration & Project Lifecycle|Agent Orchestration & Project Lifecycle]]
-- [[_COMMUNITY_Pine Script Math Functions|Pine Script Math Functions]]
-- [[_COMMUNITY_Debugging & Error Reference|Debugging & Error Reference]]
-- [[_COMMUNITY_Edge Cases & Special Scenarios|Edge Cases & Special Scenarios]]
-- [[_COMMUNITY_Multi-Agent Workflow System|Multi-Agent Workflow System]]
-- [[_COMMUNITY_Namespaces & Drawing Functions|Namespaces & Drawing Functions]]
-- [[_COMMUNITY_Video-to-Pine Pipeline|Video-to-Pine Pipeline]]
-- [[_COMMUNITY_Hooks & Onboarding System|Hooks & Onboarding System]]
-- [[_COMMUNITY_Strategy Examples & Alerts|Strategy Examples & Alerts]]
-- [[_COMMUNITY_Data Structures & Plotting|Data Structures & Plotting]]
-- [[_COMMUNITY_Strategy Execution Functions|Strategy Execution Functions]]
-- [[_COMMUNITY_Input Functions|Input Functions]]
-- [[_COMMUNITY_Backtesting & Risk Management|Backtesting & Risk Management]]
-- [[_COMMUNITY_Language Operators & Keywords|Language Operators & Keywords]]
-- [[_COMMUNITY_Debugging Tools|Debugging Tools]]
-- [[_COMMUNITY_Input Functions (time)|Input Functions (time)]]
-- [[_COMMUNITY_Input Functions (price)|Input Functions (price)]]
-- [[_COMMUNITY_Input Functions (session)|Input Functions (session)]]
-- [[_COMMUNITY_Math (sign)|Math (sign)]]
-- [[_COMMUNITY_Math (round)|Math (round)]]
-- [[_COMMUNITY_Math (floor)|Math (floor)]]
-- [[_COMMUNITY_Math (ceil)|Math (ceil)]]
-- [[_COMMUNITY_Math (sqrt)|Math (sqrt)]]
-- [[_COMMUNITY_Math (avg)|Math (avg)]]
-- [[_COMMUNITY_Request Functions|Request Functions]]
-- [[_COMMUNITY_Strategy (cancel)|Strategy (cancel)]]
-- [[_COMMUNITY_Technical Indicators|Technical Indicators]]
-- [[_COMMUNITY_Projects Directory|Projects Directory]]
+- [[_COMMUNITY_Community 0|Community 0]]
+- [[_COMMUNITY_Community 1|Community 1]]
+- [[_COMMUNITY_Community 2|Community 2]]
+- [[_COMMUNITY_Community 3|Community 3]]
+- [[_COMMUNITY_Community 4|Community 4]]
+- [[_COMMUNITY_Community 5|Community 5]]
+- [[_COMMUNITY_Community 6|Community 6]]
+- [[_COMMUNITY_Community 7|Community 7]]
+- [[_COMMUNITY_Community 8|Community 8]]
+- [[_COMMUNITY_Community 9|Community 9]]
+- [[_COMMUNITY_Community 10|Community 10]]
+- [[_COMMUNITY_Community 11|Community 11]]
+- [[_COMMUNITY_Community 12|Community 12]]
+- [[_COMMUNITY_Community 13|Community 13]]
+- [[_COMMUNITY_Community 14|Community 14]]
+- [[_COMMUNITY_Community 15|Community 15]]
+- [[_COMMUNITY_Community 16|Community 16]]
+- [[_COMMUNITY_Community 17|Community 17]]
+- [[_COMMUNITY_Community 18|Community 18]]
+- [[_COMMUNITY_Community 19|Community 19]]
+- [[_COMMUNITY_Community 20|Community 20]]
+- [[_COMMUNITY_Community 21|Community 21]]
+- [[_COMMUNITY_Community 22|Community 22]]
+- [[_COMMUNITY_Community 23|Community 23]]
+- [[_COMMUNITY_Community 24|Community 24]]
+- [[_COMMUNITY_Community 25|Community 25]]
+- [[_COMMUNITY_Community 26|Community 26]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `Pine Script v6 Function Index` - 17 edges
-2. `pine-developer Skill` - 12 edges
-3. `Agent Documentation Map` - 12 edges
-4. `Pine Script Development Workflows` - 12 edges
-5. `Pine Script v6 Language Reference` - 11 edges
-6. `Pine Script v6 Namespaces Reference` - 11 edges
-7. `VideoAnalyzer Class` - 10 edges
-8. `pine-manager Skill` - 10 edges
-9. `CLAUDE.md - Project Instructions` - 10 edges
-10. `Pine Script v6 Input Functions Documentation` - 10 edges
+2. `NQ AI BOT App` - 15 edges
+3. `App Shell Layout` - 14 edges
+4. `Walk-Forward Analyzer App` - 13 edges
+5. `pine-developer Skill` - 12 edges
+6. `Agent Documentation Map` - 12 edges
+7. `Pine Script Development Workflows` - 12 edges
+8. `Pine Script v6 Language Reference` - 11 edges
+9. `Pine Script v6 Namespaces Reference` - 11 edges
+10. `VideoAnalyzer Class` - 10 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Start Shell Script (start.sh)` --implements--> `Onboarding State Management`  [EXTRACTED]
-  start.sh → .claude/onboarding.md
-- `Request Functions Namespace (request.*)` --conceptually_related_to--> `Multi-Timeframe Analysis`  [INFERRED]
-  docs/pinescript-v6/reference-tables/namespaces.md → examples/README.md
-- `Repainting Prevention Techniques` --conceptually_related_to--> `Backtesting Best Practices`  [INFERRED]
-  examples/README.md → docs/pinescript-v6/strategies/structure.md
-- `Video Analysis Process (YouTube to Pine Script)` --references--> `youtube-transcript-api`  [INFERRED]
-  docs/video-analysis-process.md → requirements.txt
-- `Video Analysis Process (YouTube to Pine Script)` --references--> `yt-dlp YouTube Downloader`  [INFERRED]
-  docs/video-analysis-process.md → requirements.txt
+- `Static File Middleware` --references--> `NQ AI BOT App`  [INFERRED]
+  server.js → index.html
+- `PWA Install Prompt Handler` --references--> `NQ AI Bot PWA Manifest`  [INFERRED]
+  index.html → manifest.json
+- `GET / Route` --references--> `NQ AI BOT App`  [EXTRACTED]
+  server.js → index.html
+- `NQ AI Trading Bot App Identity` --conceptually_related_to--> `ICT Smart Money Concepts (SMC) Trading Strategy`  [INFERRED]
+  manifest.json → index.html
+- `Analyze Market PWA Shortcut` --references--> `Analyze Page (AI Signal Form)`  [EXTRACTED]
+  manifest.json → index.html
 
 ## Import Cycles
 - None detected.
@@ -94,87 +93,83 @@
 - **Pine Script v6 Namespace Suite** — concept_ta_namespace, concept_math_namespace, concept_str_namespace, concept_array_namespace, concept_matrix_namespace, concept_map_namespace, concept_request_namespace, concept_strategy_namespace, concept_input_namespace, concept_color_namespace [EXTRACTED 1.00]
 - **Project Scoping and Specification Workflow** — docs_project_scoping_flow_doc, docs_scoping_questions_doc, concept_project_scoping_flow, concept_project_specification, concept_pine_manager_agent [EXTRACTED 1.00]
 
-## Communities (28 total, 13 thin omitted)
+## Communities (27 total, 13 thin omitted)
 
-### Community 0 - "Agent Orchestration & Project Lifecycle"
+### Community 0 - "Community 0"
+Cohesion: 0.06
+Nodes (59): AI Trading Analysis Prompt, AllOrigins CORS Proxy, analyze() — Claude AI Signal Function, Anthropic Claude API (claude-sonnet-4-20250514), App Shell Layout, runBacktest() — Simulated Backtest Engine, Backtest Strategies (MultiVWAP, ProTrader, VP+EMA, Combined), Anthropic Claude API (+51 more)
+
+### Community 1 - "Community 1"
 Cohesion: 0.10
 Nodes (40): Adaptive Project Scoping Strategy, Bar-by-Bar Execution Model, Collections (Arrays, Matrices, Maps), Pine Script Feasibility Assessment, File Protection System (lock/unlock), Claude Code Hooks System, Pine Script Line Wrapping Rules, Pine Script Libraries (+32 more)
 
-### Community 1 - "Pine Script Math Functions"
+### Community 2 - "Community 2"
+Cohesion: 0.06
+Nodes (39): Broker Emulator Quirks Edge Case, Data Quality Issues Edge Case, Pine Script Edge Cases and Special Scenarios, First Bar Calculations Edge Case, Illiquid Market Handling Edge Case, Pre/Post Market Data Edge Case, Different Session Types Edge Case, Symbol Changes and Splits Edge Case (+31 more)
+
+### Community 3 - "Community 3"
+Cohesion: 0.06
+Nodes (38): bgcolor() for Visual Debugging, Debug Modes with input.bool(), Pine Script Debugging Tools, label.new() for Debug Information, log.* Functions for Console Output, Performance Profiling Methods, plot() for Value Debugging, table.new() for Debug Dashboards (+30 more)
+
+### Community 4 - "Community 4"
+Cohesion: 0.09
+Nodes (36): Array Operations Namespace (array.*), Backtesting Best Practices, Color Functions Namespace (color.*), Conditional Plotting Techniques, Drawing Functions (line, label, box, polyline), Input Functions Namespace (input.*), Map Operations Namespace (map.*), Mathematical Functions Namespace (math.*) (+28 more)
+
+### Community 5 - "Community 5"
+Cohesion: 0.08
+Nodes (33): Common Pine Script v6 Errors and Solutions, Lookahead and Repainting Error, Cannot Use Mutable Variable Error, NA Value Handling Error, Cannot Use Plot in Local Scope Error, Script Too Large Error, Series vs Simple Context Error, Syntax Error (+25 more)
+
+### Community 6 - "Community 6"
 Cohesion: 0.08
 Nodes (32): math.abs() Function, math Constants (pi, e, phi, rphi), Pine Script v6 Math Functions, math Logarithmic and Exponential Functions, math.min() / math.max() Functions, math.random() Function, math Trigonometric Functions (sin/cos/tan), ta.crossover() / ta.crossunder() Signal Functions (+24 more)
 
-### Community 2 - "Debugging & Error Reference"
-Cohesion: 0.10
-Nodes (26): Common Pine Script v6 Errors and Solutions, Lookahead and Repainting Error, Cannot Use Mutable Variable Error, NA Value Handling Error, Cannot Use Plot in Local Scope Error, Script Too Large Error, Series vs Simple Context Error, Syntax Error (+18 more)
+### Community 7 - "Community 7"
+Cohesion: 0.11
+Nodes (25): calc_metrics Function, Contract Value Multiplier (NQ/MNQ/ES/MES), NumPy Dependency, openpyxl Dependency, Pandas Dependency, Plotly Dependency, Streamlit Dependency, equity_curve_fig Function (+17 more)
 
-### Community 3 - "Edge Cases & Special Scenarios"
-Cohesion: 0.10
-Nodes (23): Data Quality Issues Edge Case, Pine Script Edge Cases and Special Scenarios, First Bar Calculations Edge Case, Illiquid Market Handling Edge Case, Pre/Post Market Data Edge Case, Different Session Types Edge Case, Symbol Changes and Splits Edge Case, Timezone Considerations Edge Case (+15 more)
-
-### Community 4 - "Multi-Agent Workflow System"
+### Community 8 - "Community 8"
 Cohesion: 0.19
 Nodes (22): Indicator Development Workflow, Keyword Extraction from Video Transcripts, Multi-Agent Workflow, Pine Backtester Agent, Pine Debugger Agent, Pine Developer Agent, Pine Manager Agent, Pine Optimizer Agent (+14 more)
 
-### Community 5 - "Namespaces & Drawing Functions"
-Cohesion: 0.15
-Nodes (22): Array Operations Namespace (array.*), Color Functions Namespace (color.*), Conditional Plotting Techniques, Drawing Functions (line, label, box, polyline), Input Functions Namespace (input.*), Map Operations Namespace (map.*), Mathematical Functions Namespace (math.*), Matrix Operations Namespace (matrix.*) (+14 more)
-
-### Community 6 - "Video-to-Pine Pipeline"
+### Community 9 - "Community 9"
 Cohesion: 0.15
 Nodes (21): Video Analysis Result (video_analysis_4c0e6145.json), Statusline Script (statusline.sh), Pine Script Specification Generation from Video, YouTube Transcript Extraction Pipeline, Analyze Video Shell Wrapper (analyze-video.sh), Package Manifest (package.json), Run Analysis Script (run_analysis.py), analyze Method (main entry) (+13 more)
 
-### Community 7 - "Hooks & Onboarding System"
+### Community 10 - "Community 10"
 Cohesion: 0.18
 Nodes (19): Onboarding Documentation, Protected Paths Policy (protected-paths.json), Blank Pine Template Lifecycle Pattern, Lock/Unlock File Protection Mechanism, Onboarding State Management, Pine Script Agent Routing by Keyword, Pine Script Validation Hook Pattern, After Edit Pine Validator (after-edit.sh) (+11 more)
 
-### Community 8 - "Strategy Examples & Alerts"
+### Community 11 - "Community 11"
 Cohesion: 0.15
 Nodes (17): Alert Functions, Advanced Pine Script Examples (>300 lines), Intermediate Pine Script Examples (100-300 lines), Simple Pine Script Examples (<100 lines), ICT Trading Concepts (Order Blocks, FVG, Liquidity), Multi-Timeframe Analysis, Repainting Prevention Techniques, Smart Money Concepts (SMC) (+9 more)
 
-### Community 9 - "Data Structures & Plotting"
-Cohesion: 0.13
-Nodes (17): Pine Script v6 Data Structures - Arrays, Matrices, and Maps, Pine Script Maps, Pine Script Matrices, Pine Script v6 Plotting Guide, fill() Function, plotarrow() Function, plotchar() Function, plotshape() Function (+9 more)
-
-### Community 10 - "Strategy Execution Functions"
-Cohesion: 0.14
-Nodes (16): Broker Emulator Quirks Edge Case, strategy.close() Function, strategy.close_all() Function, Pine Script v6 Strategy Functions Reference, strategy.entry() Function, strategy.equity Variable, strategy.exit() Function, strategy.netprofit Variable (+8 more)
-
-### Community 11 - "Input Functions"
-Cohesion: 0.13
-Nodes (15): input.color() Function, Pine Script v6 Input Functions Documentation, input.float() Function, input.int() Function, input.source() Function, input.string() Function, input.symbol() Function, input.timeframe() Function (+7 more)
-
-### Community 12 - "Backtesting & Risk Management"
-Cohesion: 0.22
-Nodes (14): Backtesting Best Practices, Position Sizing Methods, Risk Management (Stop Loss, Trailing Stop), Strategy Declaration Parameters, Strategy Entry and Exit Functions, Strategy Functions Namespace (strategy.*), Strategy Performance Metrics, Table Basics (creation, positioning, cells) (+6 more)
-
-### Community 13 - "Language Operators & Keywords"
+### Community 12 - "Community 12"
 Cohesion: 0.15
 Nodes (14): Arithmetic Operators, Assignment Operators (=, :=, +=, etc.), Comparison Operators, Import and Export Library Keywords, Logical Operators (and, or, not), Operator Precedence Rules, Reserved Keywords, Script Type Declarations (indicator, strategy, library) (+6 more)
 
-### Community 14 - "Debugging Tools"
-Cohesion: 0.17
-Nodes (13): bgcolor() for Visual Debugging, Debug Modes with input.bool(), Pine Script Debugging Tools, label.new() for Debug Information, log.* Functions for Console Output, Performance Profiling Methods, plot() for Value Debugging, table.new() for Debug Dashboards (+5 more)
+### Community 13 - "Community 13"
+Cohesion: 0.40
+Nodes (6): Express Dependency, Trading Dashboard Package, Express Application Server, PORT Environment Config, GET / Route, Static File Middleware
 
 ## Knowledge Gaps
-- **101 isolated node(s):** `Analyze Video Shell Wrapper (analyze-video.sh)`, `Start Shell Script (start.sh)`, `Package Manifest (package.json)`, `Run Analysis Script (run_analysis.py)`, `TRADING_KEYWORDS Constant` (+96 more)
+- **114 isolated node(s):** `Analyze Video Shell Wrapper (analyze-video.sh)`, `Start Shell Script (start.sh)`, `Package Manifest (package.json)`, `Run Analysis Script (run_analysis.py)`, `TRADING_KEYWORDS Constant` (+109 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **13 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Pine Script v6 Language Reference` connect `Data Structures & Plotting` to `Pine Script Math Functions`, `Strategy Execution Functions`, `Input Functions`, `Debugging Tools`?**
-  _High betweenness centrality (0.090) - this node is a cross-community bridge._
-- **Why does `Pine Script v6 Namespaces` connect `Pine Script Math Functions` to `Data Structures & Plotting`, `Strategy Execution Functions`, `Edge Cases & Special Scenarios`?**
-  _High betweenness centrality (0.077) - this node is a cross-community bridge._
-- **Why does `Technical Analysis Namespace (ta.*)` connect `Namespaces & Drawing Functions` to `Agent Orchestration & Project Lifecycle`, `Backtesting & Risk Management`?**
-  _High betweenness centrality (0.072) - this node is a cross-community bridge._
+- **Why does `Pine Script v6 Language Reference` connect `Community 3` to `Community 2`, `Community 6`?**
+  _High betweenness centrality (0.055) - this node is a cross-community bridge._
+- **Why does `Pine Script v6 Namespaces` connect `Community 6` to `Community 2`, `Community 3`?**
+  _High betweenness centrality (0.047) - this node is a cross-community bridge._
+- **Why does `Technical Analysis Namespace (ta.*)` connect `Community 4` to `Community 1`?**
+  _High betweenness centrality (0.044) - this node is a cross-community bridge._
 - **What connects `Analyze Video Shell Wrapper (analyze-video.sh)`, `Start Shell Script (start.sh)`, `Package Manifest (package.json)` to the rest of the system?**
-  _103 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Agent Orchestration & Project Lifecycle` be split into smaller, more focused modules?**
+  _116 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `Community 0` be split into smaller, more focused modules?**
+  _Cohesion score 0.061952074810052604 - nodes in this community are weakly interconnected._
+- **Should `Community 1` be split into smaller, more focused modules?**
   _Cohesion score 0.10384615384615385 - nodes in this community are weakly interconnected._
-- **Should `Pine Script Math Functions` be split into smaller, more focused modules?**
-  _Cohesion score 0.08266129032258064 - nodes in this community are weakly interconnected._
-- **Should `Debugging & Error Reference` be split into smaller, more focused modules?**
-  _Cohesion score 0.10153846153846154 - nodes in this community are weakly interconnected._
+- **Should `Community 2` be split into smaller, more focused modules?**
+  _Cohesion score 0.059379217273954114 - nodes in this community are weakly interconnected._
