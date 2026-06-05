@@ -1,0 +1,413 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// 5-Point Swing (HLHLH / LHLHL) + Liquidity Sweep + Trend — standalone
+// The 5th point ARMS a trend-filtered structure. While armed, the alert fires on
+// EITHER (a) the opposite-side liquidity (P4) being swept & reclaimed, OR (b) a
+// liquidity-sweep wick in the setup's direction — so moves that never tag P4 are
+// still caught. Trend shown as background shading + a corner table.
+
+//@version=6
+indicator( '5-Point Swing + Sweep'
+         , '5-Point Swing + Sweep'
+         ,  max_lines_count=500
+         ,  max_labels_count=500
+         ,  overlay=true
+         )
+
+//-----------------------------------------------------------------------------}
+// Settings — 5-Point Swing
+//-----------------------------------------------------------------------------{
+show5pt       = input.bool(true,       'Show 5-Point Swing',        group='5-Point Swing', tooltip="Track an alternating swing structure H-L-H-L-H (bullish) / L-H-L-H-L (bearish). The 5th point only ARMS the setup; the alert fires later, on the sweep trigger. Trend-filtered: bullish needs higher highs + higher low, bearish needs lower lows + lower high.")
+len5pt        = input.int(5,           '5-Point Pivot Length',      group='5-Point Swing', minval=1, tooltip="Swing sensitivity. Pivots confirm this many bars after the actual extreme (no repaint — confirmed pivots are final).")
+col5Bull      = input.color(#089981,   'Bullish Structure',          group='5-Point Swing', inline='z1')
+col5Bear      = input.color(#f23645,   'Bearish Structure',          group='5-Point Swing', inline='z1')
+show5ptLabels = input.bool(true,       'Show Labels',                group='5-Point Swing')
+labelSize     = input.string('Normal', 'Label Size',                 group='5-Point Swing', options=['Small', 'Normal', 'Large'])
+expiry5       = input.int(100,         'Sweep Window (bars)',        group='5-Point Swing', minval=1, tooltip="After the structure arms, how many bars to wait for a trigger (P4 reclaim OR a directional liquidity sweep) before the setup expires unfilled.")
+invalTol      = input.float(0.0,       'Invalidation Buffer (ATR)', group='5-Point Swing', minval=0.0, step=0.1, tooltip="Let price close up to this many ATR(14) beyond P4 before an armed setup is invalidated. 0 = strict (any close past P4 kills it). A small buffer (0.25–0.5) gives room for a deeper sweep before the reclaim.")
+maxEntries    = input.int(20,          'Max Entry Labels Kept',      group='5-Point Swing', minval=1, tooltip="Keep only the most recent N LONG/SHORT labels; older ones are deleted so the chart stays clean and labels don't silently hit the 500 cap.")
+useRsiFilter  = input.bool(true,       'RSI Divergence Filter',      group='5-Point Swing', tooltip="Skip a setup when momentum diverges from price: no LONG if P5 prints a higher high than P3 while RSI makes a LOWER high. Mirror for shorts.")
+rsiLen        = input.int(14,          'RSI Length',                 group='5-Point Swing', minval=2)
+showDivBlock  = input.bool(true,       'Mark Divergence Skips',      group='5-Point Swing', tooltip="Drop a small marker on the 5th point when a setup is skipped for divergence.")
+
+//-----------------------------------------------------------------------------}
+// Settings — Liquidity Sweep trigger
+//-----------------------------------------------------------------------------{
+useSweepTrig = input.bool(true, 'Trigger on Liquidity Sweep', group='Liquidity Sweep', tooltip="While a 5-point setup is armed, also fire when a liquidity-sweep wick prints in the setup's direction — catches moves that never tag P4.")
+lenSweeps    = input.int(5,    'Sweep Pivot Length',          group='Liquidity Sweep', minval=1, tooltip="Lookback for the swing points whose liquidity gets swept.")
+showSweep    = input.bool(true, 'Show Sweep Markers',          group='Liquidity Sweep')
+maxSweeps    = input.int(50,   'Max Sweep Markers Kept',      group='Liquidity Sweep', minval=1)
+
+//-----------------------------------------------------------------------------}
+// Settings — Trend
+//-----------------------------------------------------------------------------{
+useTrendFilter = input.bool(true,          'Filter Setups by Trend',          group='Trend', tooltip="Only arm bullish structures in an uptrend and bearish structures in a downtrend.")
+useHTF         = input.bool(true,          'Use Higher-Timeframe Trend',       group='Trend', tooltip="Determine trend from a higher timeframe instead of the chart timeframe.")
+htfTrend       = input.timeframe('60',     'Higher Timeframe',                 group='Trend', tooltip="Timeframe for the trend EMA (e.g. 15, 30, 60, 240).")
+trendLen       = input.int(50,             'Trend EMA Length',                 group='Trend', minval=2)
+htfConfirmed   = input.bool(true,          'Confirmed Trend Bar (no repaint)', group='Trend', tooltip="ON: read last CLOSED HTF bar — non-repainting. OFF: read developing bar — more responsive but can repaint.")
+showTrendBg    = input.bool(true,          'Show Trend Background',            group='Trend')
+colTrendUp     = input.color(#08998115,    'Uptrend BG',                       group='Trend', inline='t1')
+colTrendDn     = input.color(#f2364515,    'Downtrend BG',                     group='Trend', inline='t1')
+showTrendTable = input.bool(true,          'Show Trend Table',                 group='Trend')
+dispPos        = input.string('Top Right', 'Table Position',                   group='Trend', options=['Top Right', 'Top Left', 'Bottom Right', 'Bottom Left'])
+
+//-----------------------------------------------------------------------------}
+// Settings — TradersPost
+//-----------------------------------------------------------------------------{
+tpEnable = input.bool(false,    'Send Webhook Alerts', group='TradersPost', tooltip="Fire JSON webhooks to TradersPost on each signal. Also set up the matching alertcondition in TradingView's alert dialog.")
+tpTicker = input.string("NQ1!", 'Ticker Symbol',       group='TradersPost', tooltip="Ticker sent in the webhook JSON. Use active contract e.g. NQM2026.")
+tpQty    = input.int(1,         'Contract Qty',        group='TradersPost', minval=1, tooltip="Number of contracts to send in the webhook.")
+
+//-----------------------------------------------------------------------------}
+// Setup
+//-----------------------------------------------------------------------------{
+n = bar_index
+
+lblSize = switch labelSize
+    'Small'  => size.small
+    'Large'  => size.large
+    =>          size.normal
+
+// FIX: nz() prevents na propagation during ATR warm-up (first 14 bars).
+// Without this, invalBuf is na and the invalidation comparisons silently fail.
+atrVal   = ta.atr(14)
+invalBuf = invalTol * nz(atrVal, 0.0)
+rsiVal   = ta.rsi(close, rsiLen)
+
+//-----------------------------------------------------------------------------}
+// Trend Detection + Background
+//-----------------------------------------------------------------------------{
+emaTF     = useHTF ? htfTrend : timeframe.period
+emaSeries = ta.ema(close, trendLen)
+htfOffset = htfConfirmed ? 1 : 0
+trendEMA  = request.security(syminfo.tickerid, emaTF, emaSeries[htfOffset], lookahead=barmerge.lookahead_off)
+isUptrend   = close > trendEMA
+isDowntrend = close < trendEMA
+
+bgcolor(showTrendBg ? (isUptrend ? colTrendUp : isDowntrend ? colTrendDn : na) : na)
+
+//-----------------------------------------------------------------------------}
+// Types
+//-----------------------------------------------------------------------------{
+type swingPt
+    float prc
+    int   bix
+    int   dir   // 1 = swing high, -1 = swing low
+    float rsi   // RSI value at this pivot (for divergence checks)
+
+type pivotUDT
+    float prc
+    int   bix
+    bool  brk
+    bool  done
+
+//-----------------------------------------------------------------------------}
+// State
+//-----------------------------------------------------------------------------{
+var array<swingPt> zz       = array.new<swingPt>()
+var array<line>    zz5Lines = array.new<line>()
+var array<label>   zz5Label = array.new<label>()
+
+var array<label>   entryLabels = array.new<label>()
+var array<label>   sweepLabels = array.new<label>()
+var array<label>   divLabels   = array.new<label>()
+
+var bool  armed5      = false
+var bool  armed5Bull  = false
+var float armed5Level = na
+var int   armed5Bar   = na
+var int   armed5P4Bix = na
+
+var array<pivotUDT> aPivH = array.new<pivotUDT>()
+var array<pivotUDT> aPivL = array.new<pivotUDT>()
+
+// Table — declared here, built at the bottom after all logic runs so the
+// armed-state row reflects the final state of armed5 for the current bar.
+var table  trendTable  = na
+var string lastDispPos = na
+
+bool alert5Bull = false
+bool alert5Bear = false
+
+//-----------------------------------------------------------------------------}
+// Drawing helpers
+//-----------------------------------------------------------------------------{
+// Push a label into a bounded history; delete oldest beyond maxN.
+pushCapped(array<label> arr, label lb, int maxN) =>
+    arr.push(lb)
+    while arr.size() > maxN
+        label gone = arr.shift()
+        gone.delete()
+
+// Mark the 5th point when a setup is skipped due to RSI divergence.
+markDivBlock(swingPt p, bool bull) =>
+    if showDivBlock
+        stl = bull ? label.style_label_down : label.style_label_up
+        lb  = label.new(p.bix, p.prc, "div", color=color.new(color.gray, 20), textcolor=color.white, style=stl, size=size.tiny, tooltip="Setup skipped: RSI divergence (momentum not confirming price)")
+        pushCapped(divLabels, lb, maxEntries)
+
+// Draw the latest 5-point structure (segments + P4 dashed level).
+// The P4 level line is always pushed last (index 4) so trimP4Line() can find it.
+draw5(swingPt a, swingPt b, swingPt c, swingPt d, swingPt e, bool bull) =>
+    if zz5Lines.size() > 0
+        for ln in zz5Lines
+            ln.delete()
+        zz5Lines.clear()
+    if zz5Label.size() > 0
+        for lb in zz5Label
+            lb.delete()
+        zz5Label.clear()
+    col   = bull ? col5Bull : col5Bear
+    lvlX2 = n + math.min(expiry5, 500)
+    zz5Lines.push(line.new(a.bix, a.prc, b.bix, b.prc, color=col, width=2))
+    zz5Lines.push(line.new(b.bix, b.prc, c.bix, c.prc, color=col, width=2))
+    zz5Lines.push(line.new(c.bix, c.prc, d.bix, d.prc, color=col, width=2))
+    zz5Lines.push(line.new(d.bix, d.prc, e.bix, e.prc, color=col, width=2))
+    // P4 level line — index 4, must stay last so trimP4Line() references it correctly
+    zz5Lines.push(line.new(d.bix, d.prc, lvlX2, d.prc, color=color.new(col, 40), style=line.style_dashed, width=1))
+    if show5ptLabels
+        txt = bull ? "5 ▲" : "5 ▼"
+        stl = bull ? label.style_label_up : label.style_label_down
+        zz5Label.push(label.new(e.bix, e.prc, txt, color=color.new(col, 20), textcolor=color.white, style=stl, size=lblSize))
+
+// FIX: trim the P4 dashed level line to the current bar when a setup resolves.
+// Previously the line extended to its original far-future endpoint even after the
+// setup fired, expired, was trend-cancelled, or was structurally broken.
+trimP4Line() =>
+    if zz5Lines.size() > 4
+        line.set_x2(zz5Lines.get(4), n)
+
+drawBullEntry() =>
+    if show5ptLabels
+        lb = label.new(n, low, "LONG ▲", color=color.new(col5Bull, 0), textcolor=color.white, style=label.style_label_up, size=lblSize)
+        pushCapped(entryLabels, lb, maxEntries)
+
+drawBearEntry() =>
+    if show5ptLabels
+        lb = label.new(n, high, "SHORT ▼", color=color.new(col5Bear, 0), textcolor=color.white, style=label.style_label_down, size=lblSize)
+        pushCapped(entryLabels, lb, maxEntries)
+
+//-----------------------------------------------------------------------------}
+// Pivot Detection
+//-----------------------------------------------------------------------------{
+ph5 = ta.pivothigh(len5pt, len5pt)
+pl5 = ta.pivotlow (len5pt, len5pt)
+phS = ta.pivothigh(lenSweeps, lenSweeps)
+plS = ta.pivotlow (lenSweeps, lenSweeps)
+
+if not na(phS)
+    aPivH.unshift(pivotUDT.new(phS, n - lenSweeps, false, false))
+if not na(plS)
+    aPivL.unshift(pivotUDT.new(plS, n - lenSweeps, false, false))
+
+//-----------------------------------------------------------------------------}
+// Liquidity Sweep detection
+//-----------------------------------------------------------------------------{
+bullSweep = false
+bearSweep = false
+
+if aPivL.size() > 0
+    for i = aPivL.size() - 1 to 0
+        p = aPivL.get(i)
+        if not p.done
+            if low < p.prc and close > p.prc
+                bullSweep := true
+                p.done    := true
+            else if close < p.prc
+                p.done := true
+        if n - p.bix > 1000
+            aPivL.remove(i)
+
+if aPivH.size() > 0
+    for i = aPivH.size() - 1 to 0
+        p = aPivH.get(i)
+        if not p.done
+            if high > p.prc and close < p.prc
+                bearSweep := true
+                p.done    := true
+            else if close > p.prc
+                p.done := true
+        if n - p.bix > 1000
+            aPivH.remove(i)
+
+if showSweep and useSweepTrig
+    if bullSweep
+        lb = label.new(n, low, "⬩", color=#00000000, textcolor=col5Bull, style=label.style_label_up, size=size.tiny)
+        pushCapped(sweepLabels, lb, maxSweeps)
+    if bearSweep
+        lb = label.new(n, high, "⬩", color=#00000000, textcolor=col5Bear, style=label.style_label_down, size=size.tiny)
+        pushCapped(sweepLabels, lb, maxSweeps)
+
+//-----------------------------------------------------------------------------}
+// 5-Point Swing Detection + arming
+//-----------------------------------------------------------------------------{
+if show5pt
+    chk5High = false
+    chk5Low  = false
+
+    if not na(ph5)
+        hPrc = ph5
+        hBix = n - len5pt
+        if zz.size() == 0
+            zz.push(swingPt.new(hPrc, hBix, 1, rsiVal[len5pt]))
+        else
+            swingPt lastP = zz.get(zz.size() - 1)
+            if lastP.dir == -1
+                zz.push(swingPt.new(hPrc, hBix, 1, rsiVal[len5pt]))
+                chk5High := true
+            else if hPrc > lastP.prc
+                lastP.prc := hPrc
+                lastP.bix := hBix
+                lastP.rsi := rsiVal[len5pt]
+                chk5High  := true
+
+    if not na(pl5)
+        lPrc = pl5
+        lBix = n - len5pt
+        if zz.size() == 0
+            zz.push(swingPt.new(lPrc, lBix, -1, rsiVal[len5pt]))
+        else
+            swingPt lastP = zz.get(zz.size() - 1)
+            if lastP.dir == 1
+                zz.push(swingPt.new(lPrc, lBix, -1, rsiVal[len5pt]))
+                chk5Low := true
+            else if lPrc < lastP.prc
+                lastP.prc := lPrc
+                lastP.bix := lBix
+                lastP.rsi := rsiVal[len5pt]
+                chk5Low   := true
+
+    while zz.size() > 8
+        zz.shift()
+
+    // --- Bullish H-L-H-L-H: higher highs (P3>P1, P5>P3) and higher low (P4>P2) ---
+    if chk5High and zz.size() >= 5 and zz.get(zz.size() - 1).dir == 1
+        z  = zz.size()
+        p1 = zz.get(z - 5)
+        p2 = zz.get(z - 4)
+        p3 = zz.get(z - 3)
+        p4 = zz.get(z - 2)
+        p5 = zz.get(z - 1)
+        trendOk      = useTrendFilter ? isUptrend : true
+        structOkBull = p3.prc > p1.prc and p5.prc > p3.prc and p4.prc > p2.prc and trendOk
+        bearDiv      = useRsiFilter and not na(p5.rsi) and not na(p3.rsi) and p5.rsi < p3.rsi
+        if structOkBull and bearDiv
+            markDivBlock(p5, true)
+        if structOkBull and not bearDiv
+            sameSetup = armed5 and armed5Bull and armed5P4Bix == p4.bix
+            if not sameSetup
+                armed5      := true
+                armed5Bull  := true
+                armed5Level := p4.prc
+                armed5Bar   := n
+                armed5P4Bix := p4.bix
+                draw5(p1, p2, p3, p4, p5, true)
+
+    // --- Bearish L-H-L-H-L: lower lows (P3<P1, P5<P3) and lower high (P4<P2) ---
+    if chk5Low and zz.size() >= 5 and zz.get(zz.size() - 1).dir == -1
+        z  = zz.size()
+        p1 = zz.get(z - 5)
+        p2 = zz.get(z - 4)
+        p3 = zz.get(z - 3)
+        p4 = zz.get(z - 2)
+        p5 = zz.get(z - 1)
+        trendOk      = useTrendFilter ? isDowntrend : true
+        structOkBear = p3.prc < p1.prc and p5.prc < p3.prc and p4.prc < p2.prc and trendOk
+        bullDiv      = useRsiFilter and not na(p5.rsi) and not na(p3.rsi) and p5.rsi > p3.rsi
+        if structOkBear and bullDiv
+            markDivBlock(p5, false)
+        if structOkBear and not bullDiv
+            sameSetup = armed5 and not armed5Bull and armed5P4Bix == p4.bix
+            if not sameSetup
+                armed5      := true
+                armed5Bull  := false
+                armed5Level := p4.prc
+                armed5Bar   := n
+                armed5P4Bix := p4.bix
+                draw5(p1, p2, p3, p4, p5, false)
+
+    // --- Armed setup: fire on P4 reclaim OR directional liquidity sweep ---
+    // In every branch that resolves the setup, trimP4Line() is called so the
+    // dashed P4 level stops at the resolution bar rather than floating to its
+    // original far-future endpoint.
+    if armed5
+        if n - armed5Bar > expiry5
+            armed5 := false
+            trimP4Line()                                          // expired unfilled
+
+        else if useTrendFilter and ((armed5Bull and not isUptrend) or (not armed5Bull and not isDowntrend))
+            armed5 := false
+            trimP4Line()                                          // trend flipped against the setup
+
+        else if armed5Bull
+            p4Reclaim = low < armed5Level and close > armed5Level
+            sweepTrig = useSweepTrig and bullSweep
+            if p4Reclaim or sweepTrig
+                alert5Bull := true
+                drawBullEntry()
+                armed5 := false
+                trimP4Line()                                      // triggered — long signal
+            else if close < armed5Level - invalBuf
+                armed5 := false
+                trimP4Line()                                      // structure broken
+
+        else
+            p4Reclaim = high > armed5Level and close < armed5Level
+            sweepTrig = useSweepTrig and bearSweep
+            if p4Reclaim or sweepTrig
+                alert5Bear := true
+                drawBearEntry()
+                armed5 := false
+                trimP4Line()                                      // triggered — short signal
+            else if close > armed5Level + invalBuf
+                armed5 := false
+                trimP4Line()                                      // structure broken
+
+//-----------------------------------------------------------------------------}
+// TradersPost Webhook Alerts
+//-----------------------------------------------------------------------------{
+if tpEnable
+    if alert5Bull
+        alert('{"ticker":"' + tpTicker + '","action":"buy","orderType":"market","quantity":' + str.tostring(tpQty) + '}', alert.freq_once_per_bar_close)
+    if alert5Bear
+        alert('{"ticker":"' + tpTicker + '","action":"sell","orderType":"market","quantity":' + str.tostring(tpQty) + '}', alert.freq_once_per_bar_close)
+
+//-----------------------------------------------------------------------------}
+// Alert Conditions
+//-----------------------------------------------------------------------------{
+alertcondition(alert5Bull,              "5-Point Bullish (HLHLH)", "5-point bullish armed + liquidity trigger on {{ticker}} @ {{close}} — prepare long")
+alertcondition(alert5Bear,              "5-Point Bearish (LHLHL)", "5-point bearish armed + liquidity trigger on {{ticker}} @ {{close}} — prepare short")
+alertcondition(alert5Bull or alert5Bear, "Any 5-Point Signal",     "5-Point Swing signal on {{ticker}} @ {{close}}")
+
+//-----------------------------------------------------------------------------}
+// Trend + Armed-State Table
+// Placed last so armed5 reflects its final value for this bar.
+//-----------------------------------------------------------------------------{
+tblPos = switch dispPos
+    'Top Left'     => position.top_left
+    'Bottom Right' => position.bottom_right
+    'Bottom Left'  => position.bottom_left
+    =>               position.top_right
+
+// FIX: delete and recreate the table when position changes so the move takes
+// effect immediately rather than being silently ignored.
+if showTrendTable
+    if na(trendTable) or dispPos != lastDispPos
+        if not na(trendTable)
+            table.delete(trendTable)
+        trendTable  := table.new(tblPos, 1, 4, border_width=1)
+        lastDispPos := dispPos
+
+if showTrendTable and not na(trendTable)
+    trendText  = isUptrend ? "▲ UPTREND" : "▼ DOWNTREND"
+    trendColor = isUptrend ? col5Bull : col5Bear
+    tfLabel    = useHTF ? "TREND  " + htfTrend : "TREND"
+    table.cell(trendTable, 0, 0, tfLabel,   text_color=color.white, bgcolor=color.new(color.gray, 30), text_size=size.small)
+    table.cell(trendTable, 0, 1, trendText, text_color=color.white, bgcolor=color.new(trendColor,    20), text_size=size.small)
+
+    // Armed-state rows — show direction + bars remaining in the expiry window
+    barsLeft   = armed5 ? str.tostring(math.max(0, expiry5 - (n - armed5Bar))) + "b left" : "—"
+    armedDir   = armed5 ? (armed5Bull ? "BULL ▲  " : "BEAR ▼  ") + barsLeft : "Not Armed"
+    armedColor = armed5 ? (armed5Bull ? col5Bull : col5Bear) : color.gray
+    table.cell(trendTable, 0, 2, "SETUP",   text_color=color.white, bgcolor=color.new(color.gray,  30), text_size=size.small)
+    table.cell(trendTable, 0, 3, armedDir,  text_color=color.white, bgcolor=color.new(armedColor,  20), text_size=size.small)
