@@ -2,36 +2,49 @@
 //@version=6
 indicator("AMD with FVG Trigger", overlay = true, max_boxes_count = 500, max_labels_count = 500, max_lines_count = 500)
 
-// --- Constants ---
+// ─── Constants ───────────────────────────────────────────────────────────────
 color BULL_COLOR    = #089981
 color BEAR_COLOR    = #f23645
 color NEUTRAL_COLOR = #5b9cf6
+color STALE_COLOR   = #787b86
 
-// --- Inputs ---
-string sessionInput  = input.session("1900-0200", "Accumulation Session", tooltip = "The time period for the Accumulation phase (e.g., Asian Session).")
-string timezoneInput = input.string("UTC-5", "Timezone", tooltip = "Timezone for the session input.")
+// ─── Inputs ──────────────────────────────────────────────────────────────────
+// Sessions
+string session1Input = input.session("1900-0200", "Session 1 (Accumulation)", group = "Sessions", tooltip = "Primary accumulation session (e.g. Asian).")
+string timezoneInput = input.string("UTC-5",      "Timezone",                 group = "Sessions", tooltip = "Applied to all sessions.")
+bool   useSession2   = input.bool(false,           "Enable Session 2",         group = "Sessions")
+string session2Input = input.session("0200-0800",  "Session 2",                group = "Sessions", tooltip = "Optional second session (e.g. London).")
+bool   useSession3   = input.bool(false,           "Enable Session 3",         group = "Sessions")
+string session3Input = input.session("0800-1400",  "Session 3",                group = "Sessions", tooltip = "Optional third session (e.g. NY).")
 
 // Signal Settings
 string signalDir = input.string("Both", "Signal Direction", options = ["Both", "Long Only", "Short Only"], group = "Signal Settings", tooltip = "Filter which AMD sequences generate a signal.")
 string alertDir  = input.string("Both", "Alert Direction",  options = ["Both", "Long Only", "Short Only"], group = "Signal Settings", tooltip = "Filter which direction fires the alert.")
 
 // TradersPost Settings
-string tpTicker = input.string("NQ1!", "Ticker Symbol",  group = "TradersPost", tooltip = "Ticker sent in the webhook JSON. Use active contract e.g. NQM2026.")
-int    tpQty    = input.int(1,         "Contract Qty",   group = "TradersPost", minval = 1, tooltip = "Number of contracts to send in the webhook.")
+string tpTicker = input.string("NQ1!", "Ticker Symbol", group = "TradersPost", tooltip = "Ticker sent in the webhook JSON. Use active contract e.g. NQM2026.")
+int    tpQty    = input.int(1,         "Contract Qty",  group = "TradersPost", minval = 1, tooltip = "Number of contracts to send in the webhook.")
 
 // FVG Settings
-float minFVGSize = input.float(0.0, "Min FVG Size (points)", minval = 0.0, step = 0.25, group = "FVG Settings", tooltip = "Minimum gap size for a valid FVG. 0 = no filter.")
-int   fvgExtend  = input.int(20,   "Extend FVG Box (bars)", minval = 0, maxval = 500,   group = "FVG Settings", tooltip = "How many bars to extend the FVG box to the right.")
+float minFVGSize    = input.float(0.0, "Min FVG Size (points)",  minval = 0.0, step = 0.25, group = "FVG Settings", tooltip = "Minimum gap size for a valid FVG. 0 = no filter.")
+int   fvgExtend     = input.int(20,   "Extend FVG Box (bars)",  minval = 0, maxval = 500,  group = "FVG Settings", tooltip = "How many bars to extend the FVG box to the right.")
+bool  fvgMitigate   = input.bool(true, "Gray Out Mitigated FVG", group = "FVG Settings", tooltip = "Dim the FVG box when price trades fully through it.")
+bool  fvgReentAlert = input.bool(true, "FVG Re-entry Alert",     group = "FVG Settings", tooltip = "Alert when price re-enters the FVG zone after moving away from it.")
 
 // Sweep Settings
 float sweepBuffer = input.float(0.0, "Sweep Sensitivity (ticks)", minval = 0.0, step = 0.25, group = "Sweep Settings", tooltip = "Extra buffer beyond accumulation high/low required for a valid sweep. 0 = exact touch.")
 
-// Visuals
-bool showBoxes  = input.bool(true, "Show Phase Boxes",      group = "Visuals")
-bool showLabels = input.bool(true, "Show Phase Labels",     group = "Visuals")
-int  maxCycles  = input.int(5,     "Max Cycles to Display", minval = 1, group = "Visuals")
+// Timeout
+int staleTimeout = input.int(200, "Stale Cycle Timeout (bars)", minval = 10, maxval = 1000, group = "Timeout", tooltip = "If no FVG forms within this many bars after manipulation starts, the cycle resets to dormant.")
 
-// --- Types ---
+// Visuals
+bool showBoxes   = input.bool(true, "Show Phase Boxes",        group = "Visuals")
+bool showLabels  = input.bool(true, "Show Phase Labels",       group = "Visuals")
+bool showAccLine = input.bool(true, "Show Accumulation Lines", group = "Visuals", tooltip = "Dashed horizontal lines at accumulation high/low, visible through manipulation and distribution.")
+bool showDash    = input.bool(true, "Show Dashboard",          group = "Visuals")
+int  maxCycles   = input.int(5,    "Max Cycles to Display",   minval = 1, group = "Visuals")
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 type PhaseData
     int   startBar = na
     int   endBar   = na
@@ -39,73 +52,89 @@ type PhaseData
     float low      = na
     box   boxId    = na
     label labelId  = na
+    line  highLine = na
+    line  lowLine  = na
 
 type AMDCycle
     PhaseData accumulation
     PhaseData manipulation
     PhaseData fvg
     PhaseData distribution
-    int state     = 0  // 0: None, 1: Acc, 2: Wait Manip, 3: Manip, 4: FVG/Signal
-    int direction = 0  // 1: Bullish (swept low), -1: Bearish (swept high)
+    int  state     = 0   // 0: Dormant, 1: Acc, 2: Awaiting Sweep, 3: Manipulation, 4: Distribution
+    int  direction = 0   // 1: Bullish (swept low), -1: Bearish (swept high)
+    bool mitigated = false
+    bool fvgLeft   = false
 
-// --- Helpers ---
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 is_in_session(sess, tz) =>
     not na(time(timeframe.period, sess, tz))
 
 dir_allowed(dir, filter) =>
-    filter == "Both" or
-     (filter == "Long Only"  and dir ==  1) or
-     (filter == "Short Only" and dir == -1)
+    filter == "Both" or (filter == "Long Only" and dir == 1) or (filter == "Short Only" and dir == -1)
 
-// --- State ---
-var AMDCycle[] cycles         = array.new<AMDCycle>()
-var AMDCycle   currentCycle   = na
-var int        prevCycleState = na
+delete_cycle_visuals(AMDCycle c) =>
+    if not na(c.accumulation.boxId)
+        box.delete(c.accumulation.boxId)
+    if not na(c.accumulation.labelId)
+        label.delete(c.accumulation.labelId)
+    if not na(c.accumulation.highLine)
+        line.delete(c.accumulation.highLine)
+    if not na(c.accumulation.lowLine)
+        line.delete(c.accumulation.lowLine)
+    if not na(c.manipulation.boxId)
+        box.delete(c.manipulation.boxId)
+    if not na(c.manipulation.labelId)
+        label.delete(c.manipulation.labelId)
+    if not na(c.fvg.boxId)
+        box.delete(c.fvg.boxId)
+    if not na(c.fvg.labelId)
+        label.delete(c.fvg.labelId)
+    if not na(c.distribution.labelId)
+        label.delete(c.distribution.labelId)
 
-// --- Session Flags ---
-bool inSession    = is_in_session(sessionInput, timezoneInput)
+// ─── State ───────────────────────────────────────────────────────────────────
+var AMDCycle[] cycles       = array.new<AMDCycle>()
+var AMDCycle   currentCycle = na
+var int        prevState    = na
+var table      dashTable    = table.new(position.top_right, 2, 6, border_color = color.new(NEUTRAL_COLOR, 50), border_width = 1, frame_color = color.new(NEUTRAL_COLOR, 50), frame_width = 1)
+
+// ─── Session Flags ───────────────────────────────────────────────────────────
+bool inSess1      = is_in_session(session1Input, timezoneInput)
+bool inSess2      = useSession2 and is_in_session(session2Input, timezoneInput)
+bool inSess3      = useSession3 and is_in_session(session3Input, timezoneInput)
+bool inSession    = inSess1 or inSess2 or inSess3
 bool sessionStart = inSession and not inSession[1]
 bool sessionEnd   = not inSession and inSession[1]
 
-// ───────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // Start New Cycle
-// ───────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 if sessionStart
     if not na(currentCycle)
         array.push(cycles, currentCycle)
         if array.size(cycles) > maxCycles
-            AMDCycle old = array.shift(cycles)
-            if not na(old.accumulation.boxId)
-                box.delete(old.accumulation.boxId)
-            if not na(old.accumulation.labelId)
-                label.delete(old.accumulation.labelId)
-            if not na(old.manipulation.boxId)
-                box.delete(old.manipulation.boxId)
-            if not na(old.manipulation.labelId)
-                label.delete(old.manipulation.labelId)
-            if not na(old.fvg.boxId)
-                box.delete(old.fvg.boxId)
-            if not na(old.fvg.labelId)
-                label.delete(old.fvg.labelId)
+            delete_cycle_visuals(array.shift(cycles))
 
     currentCycle := AMDCycle.new(
-         accumulation = PhaseData.new(bar_index, na, high, low, na, na),
-         manipulation = PhaseData.new(na, na, na, na, na, na),
-         fvg          = PhaseData.new(na, na, na, na, na, na),
-         distribution = PhaseData.new(na, na, na, na, na, na),
-         state     = 1,
-         direction = 0
+         accumulation = PhaseData.new(startBar = bar_index, high = high, low = low),
+         manipulation = PhaseData.new(),
+         fvg          = PhaseData.new(),
+         distribution = PhaseData.new(),
+         state        = 1,
+         direction    = 0,
+         mitigated    = false,
+         fvgLeft      = false
      )
-    prevCycleState := na
+    prevState := na
 
     if showBoxes
         currentCycle.accumulation.boxId := box.new(bar_index, high, bar_index, low, border_color = NEUTRAL_COLOR, bgcolor = color.new(NEUTRAL_COLOR, 90))
     if showLabels
         currentCycle.accumulation.labelId := label.new(bar_index, high, "Accumulation", style = label.style_label_down, textcolor = chart.fg_color, color = #00000000, size = size.small)
 
-// ───────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // State 1 — Update Accumulation
-// ───────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 if not na(currentCycle) and currentCycle.state == 1
     currentCycle.accumulation.high   := math.max(currentCycle.accumulation.high, high)
     currentCycle.accumulation.low    := math.min(currentCycle.accumulation.low, low)
@@ -121,18 +150,22 @@ if not na(currentCycle) and currentCycle.state == 1
 
     if sessionEnd
         currentCycle.state := 2
+        if showAccLine
+            currentCycle.accumulation.highLine := line.new(bar_index, currentCycle.accumulation.high, bar_index, currentCycle.accumulation.high, color = color.new(NEUTRAL_COLOR, 40), style = line.style_dashed, width = 1)
+            currentCycle.accumulation.lowLine  := line.new(bar_index, currentCycle.accumulation.low,  bar_index, currentCycle.accumulation.low,  color = color.new(NEUTRAL_COLOR, 40), style = line.style_dashed, width = 1)
 
-// ───────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // State 2 — Detect Manipulation Sweep
-// ───────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 if not na(currentCycle) and currentCycle.state == 2
+    if showAccLine and not na(currentCycle.accumulation.highLine)
+        line.set_x2(currentCycle.accumulation.highLine, bar_index)
+        line.set_x2(currentCycle.accumulation.lowLine,  bar_index)
+
     bool sweepHigh = high > currentCycle.accumulation.high + sweepBuffer
     bool sweepLow  = low  < currentCycle.accumulation.low  - sweepBuffer
 
-    // FIX: When a single bar sweeps both sides (spike candle), use close position
-    // relative to accumulation midpoint to identify which sweep was the manipulation.
-    // Close below midpoint = bearish rejection of the high → direction -1
-    // Close above midpoint = bullish rejection of the low  → direction  1
+    // When both sides swept on one bar, close vs midpoint resolves direction
     int proposedDir = 0
     if sweepHigh and sweepLow
         float accMid = (currentCycle.accumulation.high + currentCycle.accumulation.low) / 2.0
@@ -152,59 +185,101 @@ if not na(currentCycle) and currentCycle.state == 2
         if showBoxes
             currentCycle.manipulation.boxId := box.new(bar_index, high, bar_index, low, border_color = NEUTRAL_COLOR, bgcolor = color.new(NEUTRAL_COLOR, 85))
         if showLabels
-            bool labelAbove = proposedDir == -1
-            currentCycle.manipulation.labelId := label.new(bar_index, labelAbove ? high : low, "Manipulation", style = labelAbove ? label.style_label_down : label.style_label_up, textcolor = chart.fg_color, color = #00000000, size = size.small)
+            bool lAbove = proposedDir == -1
+            currentCycle.manipulation.labelId := label.new(bar_index, lAbove ? high : low, "Manipulation", style = lAbove ? label.style_label_down : label.style_label_up, textcolor = chart.fg_color, color = #00000000, size = size.small)
 
-// ───────────────────────────────────────────
-// State 3 — Update Manipulation + Detect FVG
-// ───────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// State 3 — Update Manipulation + Detect FVG + Stale Timeout
+// ─────────────────────────────────────────────────────────────────────────────
 if not na(currentCycle) and currentCycle.state == 3
     currentCycle.manipulation.high   := math.max(currentCycle.manipulation.high, high)
     currentCycle.manipulation.low    := math.min(currentCycle.manipulation.low, low)
     currentCycle.manipulation.endBar := bar_index
+
+    if showAccLine and not na(currentCycle.accumulation.highLine)
+        line.set_x2(currentCycle.accumulation.highLine, bar_index)
+        line.set_x2(currentCycle.accumulation.lowLine,  bar_index)
 
     if not na(currentCycle.manipulation.boxId)
         box.set_top(currentCycle.manipulation.boxId,    currentCycle.manipulation.high)
         box.set_bottom(currentCycle.manipulation.boxId, currentCycle.manipulation.low)
         box.set_right(currentCycle.manipulation.boxId,  bar_index)
 
-    float bullGap = low    - high[2]
-    float bearGap = low[2] - high
+    // Stale timeout — gray out and reset if FVG never formed
+    if bar_index - currentCycle.manipulation.startBar >= staleTimeout
+        currentCycle.state := 0
+        if not na(currentCycle.manipulation.boxId)
+            box.set_bgcolor(currentCycle.manipulation.boxId,      color.new(STALE_COLOR, 90))
+            box.set_border_color(currentCycle.manipulation.boxId, STALE_COLOR)
+        if not na(currentCycle.accumulation.highLine)
+            line.set_color(currentCycle.accumulation.highLine, color.new(STALE_COLOR, 70))
+            line.set_color(currentCycle.accumulation.lowLine,  color.new(STALE_COLOR, 70))
 
-    bool bullishFVG = low > high[2] and close[1] > high[2] and bullGap >= minFVGSize
-    bool bearishFVG = high < low[2] and close[1] < low[2]  and bearGap >= minFVGSize
+    else
+        float bullGap = low    - high[2]
+        float bearGap = low[2] - high
 
-    if (currentCycle.direction == 1 and bullishFVG) or (currentCycle.direction == -1 and bearishFVG)
-        currentCycle.state        := 4
-        // FIX: align startBar with the visual box left edge (candle[2] = bar_index - 2)
-        currentCycle.fvg.startBar := bar_index - 2
-        currentCycle.fvg.high     := currentCycle.direction == 1 ? low    : low[2]
-        currentCycle.fvg.low      := currentCycle.direction == 1 ? high[2] : high
+        bool bullishFVG = low > high[2] and close[1] > high[2] and bullGap >= minFVGSize
+        bool bearishFVG = high < low[2] and close[1] < low[2]  and bearGap >= minFVGSize
 
-        if showBoxes
-            color fvgColor = currentCycle.direction == 1 ? BULL_COLOR : BEAR_COLOR
-            currentCycle.fvg.boxId := box.new(bar_index - 2, currentCycle.fvg.high, bar_index + fvgExtend, currentCycle.fvg.low, border_color = fvgColor, bgcolor = color.new(fvgColor, 70))
-        if showLabels
-            currentCycle.fvg.labelId := label.new(bar_index, currentCycle.direction == 1 ? low : high, "FVG Trigger", style = currentCycle.direction == 1 ? label.style_label_up : label.style_label_down, textcolor = chart.fg_color, color = currentCycle.direction == 1 ? BULL_COLOR : BEAR_COLOR, size = size.small)
+        if (currentCycle.direction == 1 and bullishFVG) or (currentCycle.direction == -1 and bearishFVG)
+            currentCycle.state        := 4
+            currentCycle.fvg.startBar := bar_index - 2
+            currentCycle.fvg.high     := currentCycle.direction == 1 ? low    : low[2]
+            currentCycle.fvg.low      := currentCycle.direction == 1 ? high[2] : high
 
-// ───────────────────────────────────────────
-// State 4 — Distribution Label (once)
-// ───────────────────────────────────────────
+            if showBoxes
+                color fvgColor = currentCycle.direction == 1 ? BULL_COLOR : BEAR_COLOR
+                currentCycle.fvg.boxId := box.new(bar_index - 2, currentCycle.fvg.high, bar_index + fvgExtend, currentCycle.fvg.low, border_color = fvgColor, bgcolor = color.new(fvgColor, 70))
+            if showLabels
+                currentCycle.fvg.labelId := label.new(bar_index, currentCycle.direction == 1 ? low : high, "FVG Trigger", style = currentCycle.direction == 1 ? label.style_label_up : label.style_label_down, textcolor = chart.fg_color, color = currentCycle.direction == 1 ? BULL_COLOR : BEAR_COLOR, size = size.small)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State 4 — Distribution + FVG Mitigation + Re-entry Alert
+// ─────────────────────────────────────────────────────────────────────────────
 if not na(currentCycle) and currentCycle.state == 4
+    if showAccLine and not na(currentCycle.accumulation.highLine)
+        line.set_x2(currentCycle.accumulation.highLine, bar_index)
+        line.set_x2(currentCycle.accumulation.lowLine,  bar_index)
+
+    // Distribution label — once
     if na(currentCycle.distribution.startBar)
         currentCycle.distribution.startBar := bar_index
         if showLabels
             currentCycle.distribution.labelId := label.new(bar_index, high, "Distribution", style = label.style_label_down, textcolor = chart.fg_color, color = #00000000, size = size.small)
 
-// ───────────────────────────────────────────
+    // FVG mitigation: price trades fully through the gap
+    if fvgMitigate and not currentCycle.mitigated
+        bool filled = currentCycle.direction == 1 ? low <= currentCycle.fvg.low : high >= currentCycle.fvg.high
+        if filled
+            currentCycle.mitigated := true
+            if not na(currentCycle.fvg.boxId)
+                box.set_bgcolor(currentCycle.fvg.boxId,      color.new(STALE_COLOR, 85))
+                box.set_border_color(currentCycle.fvg.boxId, STALE_COLOR)
+
+    // FVG re-entry: price leaves FVG zone then comes back in
+    if fvgReentAlert and not currentCycle.mitigated
+        if not currentCycle.fvgLeft
+            bool leftBull = currentCycle.direction == 1  and close > currentCycle.fvg.high
+            bool leftBear = currentCycle.direction == -1 and close < currentCycle.fvg.low
+            if leftBull or leftBear
+                currentCycle.fvgLeft := true
+        else
+            bool reentryBull = currentCycle.direction == 1  and low  <= currentCycle.fvg.high and high >= currentCycle.fvg.low
+            bool reentryBear = currentCycle.direction == -1 and high >= currentCycle.fvg.low  and low  <= currentCycle.fvg.high
+            if (reentryBull or reentryBear) and barstate.isconfirmed
+                string reentryAct = currentCycle.direction == 1 ? "buy" : "sell"
+                alert('{"ticker":"' + tpTicker + '","action":"' + reentryAct + '","orderType":"limit","quantity":' + str.tostring(tpQty) + ',"comment":"FVG reentry"}', alert.freq_once_per_bar_close)
+                currentCycle.fvgLeft := false  // reset so it fires again after each excursion
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Signals & Alerts
-// ───────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 int  cycleDir    = not na(currentCycle) ? currentCycle.direction : 0
-bool signal      = not na(currentCycle) and currentCycle.state == 4 and prevCycleState != 4 and barstate.isconfirmed
+bool signal      = not na(currentCycle) and currentCycle.state == 4 and prevState != 4 and barstate.isconfirmed
 bool signalLong  = signal and cycleDir ==  1 and dir_allowed( 1, alertDir)
 bool signalShort = signal and cycleDir == -1 and dir_allowed(-1, alertDir)
 
-// TradersPost webhook alerts — fires once on confirmed bar close
 if signalLong
     alert('{"ticker":"' + tpTicker + '","action":"buy","orderType":"market","quantity":' + str.tostring(tpQty) + '}', alert.freq_once_per_bar_close)
 
@@ -214,8 +289,68 @@ if signalShort
 plotshape(signalLong,  "Long Signal",  shape.triangleup,   location.belowbar, color = BULL_COLOR, size = size.small, display = display.all)
 plotshape(signalShort, "Short Signal", shape.triangledown, location.abovebar, color = BEAR_COLOR, size = size.small, display = display.all)
 
-// ───────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Dashboard Table
+// ─────────────────────────────────────────────────────────────────────────────
+if showDash
+    string stateStr = "No Active Cycle"
+    color  stateCl  = NEUTRAL_COLOR
+    string dirStr   = "—"
+    color  dirCl    = chart.fg_color
+    string accStr   = "—"
+    string fvgStr   = "—"
+    color  fvgCl    = chart.fg_color
+    string mitStr   = "—"
+    color  mitCl    = chart.fg_color
+
+    if not na(currentCycle)
+        if currentCycle.state == 0
+            stateStr := "Stale / Reset"
+            stateCl  := STALE_COLOR
+        else if currentCycle.state == 1
+            stateStr := "Accumulation"
+            stateCl  := NEUTRAL_COLOR
+        else if currentCycle.state == 2
+            stateStr := "Awaiting Sweep"
+            stateCl  := NEUTRAL_COLOR
+        else if currentCycle.state == 3
+            stateStr := "Manipulation"
+            stateCl  := currentCycle.direction == 1 ? BULL_COLOR : currentCycle.direction == -1 ? BEAR_COLOR : NEUTRAL_COLOR
+        else if currentCycle.state == 4
+            stateStr := "Distribution"
+            stateCl  := currentCycle.direction == 1 ? BULL_COLOR : BEAR_COLOR
+
+        if currentCycle.direction != 0
+            dirStr := currentCycle.direction == 1 ? "Bullish  ▲" : "Bearish  ▼"
+            dirCl  := currentCycle.direction == 1 ? BULL_COLOR : BEAR_COLOR
+
+        if not na(currentCycle.accumulation.high)
+            accStr := str.tostring(currentCycle.accumulation.high, format.mintick) + " / " + str.tostring(currentCycle.accumulation.low, format.mintick)
+
+        if currentCycle.state >= 4 and not na(currentCycle.fvg.high)
+            fvgStr := str.tostring(currentCycle.fvg.high, format.mintick) + " / " + str.tostring(currentCycle.fvg.low, format.mintick)
+            fvgCl  := currentCycle.mitigated ? STALE_COLOR : (currentCycle.direction == 1 ? BULL_COLOR : BEAR_COLOR)
+            mitStr := currentCycle.mitigated ? "Mitigated" : "Active"
+            mitCl  := currentCycle.mitigated ? STALE_COLOR : BULL_COLOR
+
+    color hdrBg  = color.new(NEUTRAL_COLOR, 75)
+    color cellBg = color.new(chart.bg_color, 0)
+
+    table.cell(dashTable, 0, 0, "AMD Status", text_color = chart.fg_color, bgcolor = hdrBg,  text_size = size.small)
+    table.cell(dashTable, 1, 0, "",           text_color = chart.fg_color, bgcolor = hdrBg,  text_size = size.small)
+    table.cell(dashTable, 0, 1, "Phase",      text_color = chart.fg_color, bgcolor = cellBg, text_size = size.small)
+    table.cell(dashTable, 1, 1, stateStr,     text_color = stateCl,        bgcolor = cellBg, text_size = size.small)
+    table.cell(dashTable, 0, 2, "Direction",  text_color = chart.fg_color, bgcolor = cellBg, text_size = size.small)
+    table.cell(dashTable, 1, 2, dirStr,       text_color = dirCl,          bgcolor = cellBg, text_size = size.small)
+    table.cell(dashTable, 0, 3, "Acc Range",  text_color = chart.fg_color, bgcolor = cellBg, text_size = size.small)
+    table.cell(dashTable, 1, 3, accStr,       text_color = chart.fg_color, bgcolor = cellBg, text_size = size.small)
+    table.cell(dashTable, 0, 4, "FVG Zone",   text_color = chart.fg_color, bgcolor = cellBg, text_size = size.small)
+    table.cell(dashTable, 1, 4, fvgStr,       text_color = fvgCl,          bgcolor = cellBg, text_size = size.small)
+    table.cell(dashTable, 0, 5, "FVG Status", text_color = chart.fg_color, bgcolor = cellBg, text_size = size.small)
+    table.cell(dashTable, 1, 5, mitStr,       text_color = mitCl,          bgcolor = cellBg, text_size = size.small)
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Update prev state — must be last
-// ───────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 if not na(currentCycle)
-    prevCycleState := currentCycle.state
+    prevState := currentCycle.state
