@@ -1,0 +1,184 @@
+//@version=6
+indicator("ORB + Volume Profile + RSI v1.2", overlay = true)
+
+// ─── Inputs: Opening Range ───────────────────────────────────────────────────
+sessStr    = input.session("0930-1600", "Session",                group = "Opening Range")
+sessTz     = input.string("America/New_York", "Session timezone", group = "Opening Range")
+orbMinutes = input.int(5, "Opening-range minutes", minval = 1,    group = "Opening Range")
+
+// ─── Inputs: Volume Profile ──────────────────────────────────────────────────
+lookback   = input.int(100, "Profile lookback (bars)", minval = 20, maxval = 1000, group = "Volume Profile")
+numBins    = input.int(24,  "Profile bins", minval = 6, maxval = 100,              group = "Volume Profile")
+valuePct   = input.float(0.70, "Value-area fraction", minval = 0.5, maxval = 0.9, step = 0.05, group = "Volume Profile")
+lvnFrac    = input.float(0.30, "Low-volume-node threshold (x POC)", minval = 0.05, maxval = 0.9, step = 0.05, group = "Volume Profile")
+requireLVN = input.bool(true, "Require break into low-volume node", group = "Volume Profile")
+
+// ─── Inputs: RSI ─────────────────────────────────────────────────────────────
+useRSI     = input.bool(true, "Require RSI momentum", group = "RSI")
+rsiLen     = input.int(14, "RSI length", minval = 2,   group = "RSI")
+rsiLong    = input.float(50, "RSI long threshold",     group = "RSI")
+rsiShort   = input.float(50, "RSI short threshold",    group = "RSI")
+useDiv     = input.bool(true, "Show RSI divergences",  group = "RSI")
+requireDiv = input.bool(false, "Require divergence for signal", group = "RSI")
+divL       = input.int(5, "Divergence pivot left",  minval = 1, group = "RSI")
+divR       = input.int(5, "Divergence pivot right", minval = 1, group = "RSI")
+
+// ─── Inputs: Trend Filter ────────────────────────────────────────────────────
+useTrendFilter = input.bool(true,       "Filter Signals by Trend",   group = "Trend Filter", tooltip = "Only allow long breakouts in an uptrend and short breakouts in a downtrend.")
+useHTF         = input.bool(true,       "Use Higher Timeframe",       group = "Trend Filter", tooltip = "Pull the trend EMA from a higher timeframe instead of the chart timeframe.")
+htfTF          = input.timeframe("60",  "Higher Timeframe",           group = "Trend Filter", tooltip = "Timeframe for the trend EMA. On a 5m chart, 60 = the 1H trend.")
+trendLen       = input.int(50,          "Trend EMA Length",           group = "Trend Filter", minval = 2)
+htfConfirmed   = input.bool(true,       "Confirmed Bar (no repaint)", group = "Trend Filter", tooltip = "ON: read last CLOSED HTF bar — non-repainting. OFF: read developing bar — more responsive.")
+showTrendBg    = input.bool(false,      "Show Trend Background",      group = "Trend Filter")
+colTrendUp     = input.color(#08998115, "Uptrend BG",                 group = "Trend Filter", inline = "tb")
+colTrendDn     = input.color(#f2364515, "Downtrend BG",               group = "Trend Filter", inline = "tb")
+
+// ─── Inputs: Signals ─────────────────────────────────────────────────────────
+showSignals = input.bool(true, "Show BUY/SELL signals", group = "Signals")
+
+// ─── Trend calculation ────────────────────────────────────────────────────────
+emaSeries  = ta.ema(close, trendLen)
+htfOffset  = htfConfirmed ? 1 : 0
+emaTF      = useHTF ? htfTF : timeframe.period
+trendEMA   = request.security(syminfo.tickerid, emaTF, emaSeries[htfOffset], lookahead = barmerge.lookahead_off)
+isUptrend   = close > trendEMA
+isDowntrend = close < trendEMA
+
+bgcolor(showTrendBg ? (isUptrend ? colTrendUp : isDowntrend ? colTrendDn : na) : na)
+
+// ─── Session detection (timezone-locked) ─────────────────────────────────────
+inSession    = not na(time(timeframe.period, sessStr, sessTz))
+sessionStart = inSession and not inSession[1]
+
+// ─── Volume profile (built at session open, frozen for the day) ───────────────
+var array<float> binVol = array.new<float>(numBins, 0.0)
+var float profLo = na
+var float binW   = na
+var float pocVol = na
+var float pocPx  = na
+var float vahPx  = na
+var float valPx  = na
+
+if sessionStart
+    float hi = high[1]
+    float lo = low[1]
+    for i = 1 to lookback
+        hi := math.max(hi, high[i])
+        lo := math.min(lo, low[i])
+    profLo := lo
+    float w = (hi - lo) / numBins
+    binW := w <= 0 ? syminfo.mintick : w
+    binVol := array.new<float>(numBins, 0.0)
+    for i = 1 to lookback
+        float px = (high[i] + low[i] + close[i]) / 3.0
+        int b = math.max(0, math.min(numBins - 1, int((px - profLo) / binW)))
+        array.set(binVol, b, array.get(binVol, b) + volume[i])
+    float total = 0.0
+    int pocIdx = 0
+    float pV = -1.0
+    for i = 0 to numBins - 1
+        float v = array.get(binVol, i)
+        total += v
+        if v > pV
+            pV    := v
+            pocIdx := i
+    pocVol := pV
+    pocPx  := profLo + (pocIdx + 0.5) * binW
+    float vaVol = pV
+    float target = total * valuePct
+    int up = pocIdx
+    int dn = pocIdx
+    while vaVol < target and (up < numBins - 1 or dn > 0)
+        float uV = up < numBins - 1 ? array.get(binVol, up + 1) : -1.0
+        float dV = dn > 0 ? array.get(binVol, dn - 1) : -1.0
+        if uV >= dV
+            up    += 1
+            vaVol += math.max(uV, 0.0)
+        else
+            dn    -= 1
+            vaVol += math.max(dV, 0.0)
+    vahPx := profLo + (up + 1) * binW
+    valPx := profLo + dn * binW
+
+f_binVol(float price) =>
+    int b = math.max(0, math.min(numBins - 1, int((price - profLo) / binW)))
+    array.get(binVol, b)
+
+// ─── Opening range ────────────────────────────────────────────────────────────
+var float orbHigh    = na
+var float orbLow     = na
+var int   sessOpen   = na
+var bool  longFired  = false   // prevents the same breakout direction re-firing within a session
+var bool  shortFired = false
+
+if sessionStart
+    orbHigh    := high
+    orbLow     := low
+    sessOpen   := time
+    longFired  := false
+    shortFired := false
+
+int  orbEnd   = na(sessOpen) ? na : sessOpen + orbMinutes * 60 * 1000
+bool inORB    = inSession and not na(orbEnd) and time < orbEnd
+bool orbReady = inSession and not na(orbEnd) and time >= orbEnd
+
+if inORB
+    orbHigh := math.max(orbHigh, high)
+    orbLow  := math.min(orbLow, low)
+
+// ─── Breakouts — each direction fires only once per session ──────────────────
+bool longBreak  = orbReady and close > orbHigh and close[1] <= orbHigh and not longFired
+bool shortBreak = orbReady and close < orbLow  and close[1] >= orbLow  and not shortFired
+
+// ─── Volume-profile filter ───────────────────────────────────────────────────
+bool longThin  = na(binW) ? false : f_binVol(orbHigh + binW * 0.5) < lvnFrac * pocVol
+bool shortThin = na(binW) ? false : f_binVol(orbLow  - binW * 0.5) < lvnFrac * pocVol
+bool longVPok  = not requireLVN or longThin
+bool shortVPok = not requireLVN or shortThin
+
+// ─── RSI momentum ────────────────────────────────────────────────────────────
+float rsi = ta.rsi(close, rsiLen)
+bool longRSIok  = not useRSI or (rsi > rsiLong  and rsi >= rsi[1])
+bool shortRSIok = not useRSI or (rsi < rsiShort and rsi <= rsi[1])
+
+// ─── RSI divergence ──────────────────────────────────────────────────────────
+bool plFound = not na(ta.pivotlow(rsi, divL, divR))
+bool phFound = not na(ta.pivothigh(rsi, divL, divR))
+bool bullDiv = plFound and (rsi[divR] > ta.valuewhen(plFound, rsi[divR], 1)) and (low[divR]  < ta.valuewhen(plFound, low[divR], 1))
+bool bearDiv = phFound and (rsi[divR] < ta.valuewhen(phFound, rsi[divR], 1)) and (high[divR] > ta.valuewhen(phFound, high[divR], 1))
+bool longDivOk  = not requireDiv or bullDiv
+bool shortDivOk = not requireDiv or bearDiv
+
+// ─── Trend gate ──────────────────────────────────────────────────────────────
+bool trendOkLong  = not useTrendFilter or isUptrend
+bool trendOkShort = not useTrendFilter or isDowntrend
+
+// ─── Final signals: four confluences ─────────────────────────────────────────
+bool buySignal  = longBreak  and longVPok  and longRSIok  and longDivOk  and trendOkLong
+bool sellSignal = shortBreak and shortVPok and shortRSIok and shortDivOk and trendOkShort
+
+// Lock out further breakouts in the same direction for the rest of the session
+if buySignal
+    longFired := true
+if sellSignal
+    shortFired := true
+
+// ─── Signal plots ─────────────────────────────────────────────────────────────
+plotshape(showSignals and buySignal,  title = "BUY",  style = shape.labelup,   location = location.belowbar, color = color.new(color.green, 0), text = "BUY",  textcolor = color.white, size = size.normal)
+plotshape(showSignals and sellSignal, title = "SELL", style = shape.labeldown, location = location.abovebar, color = color.new(color.red, 0),   text = "SELL", textcolor = color.white, size = size.normal)
+
+// ─── Divergence markers ───────────────────────────────────────────────────────
+plotshape(useDiv and bullDiv ? low[divR]  : na, title = "Bull div", style = shape.circle, location = location.absolute, offset = -divR, color = color.new(color.lime, 0),   size = size.tiny)
+plotshape(useDiv and bearDiv ? high[divR] : na, title = "Bear div", style = shape.circle, location = location.absolute, offset = -divR, color = color.new(color.orange, 0), size = size.tiny)
+
+// ─── Level plots ──────────────────────────────────────────────────────────────
+plot(inSession ? orbHigh : na, "OR High", color.new(color.teal, 0),   2, plot.style_linebr)
+plot(inSession ? orbLow  : na, "OR Low",  color.new(color.red, 0),    2, plot.style_linebr)
+plot(inSession ? pocPx   : na, "POC",     color.new(color.orange, 0), 1, plot.style_linebr)
+plot(inSession ? vahPx   : na, "VAH",     color.new(color.gray, 0),   1, plot.style_circles)
+plot(inSession ? valPx   : na, "VAL",     color.new(color.gray, 0),   1, plot.style_circles)
+bgcolor(inORB ? color.new(color.blue, 90) : na, title = "Opening range window")
+
+// ─── Alerts ───────────────────────────────────────────────────────────────────
+alertcondition(buySignal,  title = "Buy signal",  message = "BUY {{ticker}} @ {{close}}")
+alertcondition(sellSignal, title = "Sell signal", message = "SELL {{ticker}} @ {{close}}")
