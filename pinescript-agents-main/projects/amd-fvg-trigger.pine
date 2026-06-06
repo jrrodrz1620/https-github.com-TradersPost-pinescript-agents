@@ -37,6 +37,16 @@ float sweepBuffer = input.float(0.0, "Sweep Sensitivity (ticks)", minval = 0.0, 
 // Timeout
 int staleTimeout = input.int(200, "Stale Cycle Timeout (bars)", minval = 10, maxval = 1000, group = "Timeout", tooltip = "If no FVG forms within this many bars after manipulation starts, the cycle resets to dormant.")
 
+// Trend Filter
+bool   useTrendFilter = input.bool(true,       "Filter Webhooks by Trend",   group = "Trend Filter", tooltip = "Only send webhooks when the AMD direction aligns with the HTF trend. Bullish AMD only fires in uptrend; bearish AMD only fires in downtrend. Visuals still draw so you can see all setups.")
+bool   useHTF         = input.bool(true,       "Use Higher Timeframe",       group = "Trend Filter", tooltip = "Pull the trend EMA from a higher timeframe instead of the chart timeframe.")
+string htfTF          = input.timeframe("60",  "Higher Timeframe",           group = "Trend Filter", tooltip = "Timeframe for the trend EMA. On a 5m chart, 60 = the 1H trend.")
+int    trendEMALen    = input.int(50,          "Trend EMA Length",           group = "Trend Filter", minval = 2, tooltip = "EMA length measured on the selected timeframe.")
+bool   htfConfirmed   = input.bool(true,       "Confirmed Bar (no repaint)", group = "Trend Filter", tooltip = "ON: read last CLOSED HTF bar — non-repainting. OFF: read developing bar — more responsive.")
+bool   showTrendBg    = input.bool(false,      "Show Trend Background",      group = "Trend Filter")
+color  colTrendUp     = input.color(#08998115, "Uptrend BG",                 group = "Trend Filter", inline = "tb")
+color  colTrendDn     = input.color(#f2364515, "Downtrend BG",               group = "Trend Filter", inline = "tb")
+
 // Visuals
 bool showBoxes   = input.bool(true, "Show Phase Boxes",        group = "Visuals")
 bool showLabels  = input.bool(true, "Show Phase Labels",       group = "Visuals")
@@ -92,11 +102,21 @@ delete_cycle_visuals(AMDCycle c) =>
     if not na(c.distribution.labelId)
         label.delete(c.distribution.labelId)
 
+// ─── Trend Filter ────────────────────────────────────────────────────────────
+emaSeries   = ta.ema(close, trendEMALen)
+htfOffset   = htfConfirmed ? 1 : 0
+emaTF       = useHTF ? htfTF : timeframe.period
+trendEMA    = request.security(syminfo.tickerid, emaTF, emaSeries[htfOffset], lookahead = barmerge.lookahead_off)
+isUptrend   = close > trendEMA
+isDowntrend = close < trendEMA
+
+bgcolor(showTrendBg ? (isUptrend ? colTrendUp : isDowntrend ? colTrendDn : na) : na)
+
 // ─── State ───────────────────────────────────────────────────────────────────
 var AMDCycle[] cycles       = array.new<AMDCycle>()
 var AMDCycle   currentCycle = na
 var int        prevState    = na
-var table      dashTable    = table.new(position.top_right, 2, 6, border_color = color.new(NEUTRAL_COLOR, 50), border_width = 1, frame_color = color.new(NEUTRAL_COLOR, 50), frame_width = 1)
+var table      dashTable    = table.new(position.top_right, 2, 7, border_color = color.new(NEUTRAL_COLOR, 50), border_width = 1, frame_color = color.new(NEUTRAL_COLOR, 50), frame_width = 1)
 
 // ─── Session Flags ───────────────────────────────────────────────────────────
 bool inSess1      = is_in_session(session1Input, timezoneInput)
@@ -267,7 +287,8 @@ if not na(currentCycle) and currentCycle.state == 4
         else
             bool reentryBull = currentCycle.direction == 1  and low  <= currentCycle.fvg.high and high >= currentCycle.fvg.low
             bool reentryBear = currentCycle.direction == -1 and high >= currentCycle.fvg.low  and low  <= currentCycle.fvg.high
-            if (reentryBull or reentryBear) and barstate.isconfirmed
+            bool reentryTrendOk = not useTrendFilter or (currentCycle.direction == 1 ? isUptrend : isDowntrend)
+            if (reentryBull or reentryBear) and barstate.isconfirmed and reentryTrendOk
                 string reentryAct = currentCycle.direction == 1 ? "buy" : "sell"
                 alert('{"ticker":"' + tpTicker + '","action":"' + reentryAct + '","orderType":"limit","quantity":' + str.tostring(tpQty) + ',"comment":"FVG reentry"}', alert.freq_once_per_bar_close)
                 currentCycle.fvgLeft := false  // reset so it fires again after each excursion
@@ -277,8 +298,12 @@ if not na(currentCycle) and currentCycle.state == 4
 // ─────────────────────────────────────────────────────────────────────────────
 int  cycleDir    = not na(currentCycle) ? currentCycle.direction : 0
 bool signal      = not na(currentCycle) and currentCycle.state == 4 and prevState != 4 and barstate.isconfirmed
-bool signalLong  = signal and cycleDir ==  1 and dir_allowed( 1, alertDir)
-bool signalShort = signal and cycleDir == -1 and dir_allowed(-1, alertDir)
+// Trend alignment: when the filter is on, long signals only fire in an uptrend
+// and short signals only fire in a downtrend — counter-trend webhooks are blocked.
+bool trendOkLong  = not useTrendFilter or isUptrend
+bool trendOkShort = not useTrendFilter or isDowntrend
+bool signalLong  = signal and cycleDir ==  1 and dir_allowed( 1, alertDir) and trendOkLong
+bool signalShort = signal and cycleDir == -1 and dir_allowed(-1, alertDir) and trendOkShort
 
 if signalLong
     alert('{"ticker":"' + tpTicker + '","action":"buy","orderType":"market","quantity":' + str.tostring(tpQty) + '}', alert.freq_once_per_bar_close)
@@ -348,6 +373,12 @@ if showDash
     table.cell(dashTable, 1, 4, fvgStr,       text_color = fvgCl,          bgcolor = cellBg, text_size = size.small)
     table.cell(dashTable, 0, 5, "FVG Status", text_color = chart.fg_color, bgcolor = cellBg, text_size = size.small)
     table.cell(dashTable, 1, 5, mitStr,       text_color = mitCl,          bgcolor = cellBg, text_size = size.small)
+
+    string trendStr  = isUptrend ? "Uptrend  ▲" : isDowntrend ? "Downtrend ▼" : "Neutral"
+    color  trendCl   = isUptrend ? BULL_COLOR   : isDowntrend ? BEAR_COLOR    : NEUTRAL_COLOR
+    string trendLbl  = useTrendFilter ? "HTF Trend" : "HTF Trend (off)"
+    table.cell(dashTable, 0, 6, trendLbl, text_color = chart.fg_color, bgcolor = cellBg, text_size = size.small)
+    table.cell(dashTable, 1, 6, trendStr,  text_color = useTrendFilter ? trendCl : STALE_COLOR, bgcolor = cellBg, text_size = size.small)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Update prev state — must be last
