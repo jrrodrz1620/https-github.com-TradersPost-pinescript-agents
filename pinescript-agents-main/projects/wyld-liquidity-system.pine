@@ -1,0 +1,150 @@
+//@version=6
+strategy("WYLD Liquidity System", overlay=true,
+     default_qty_type=strategy.percent_of_equity, default_qty_value=10,
+     commission_type=strategy.commission.percent, commission_value=0.05,
+     calc_on_every_tick=true)
+
+// ── Inputs ───────────────────────────────────────────────────────────────────
+emaLen     = input.int(9,   "EMA Length",             group="Trend")
+smaLen     = input.int(20,  "SMA Length",             group="Trend")
+
+atrLen     = input.int(14,  "ATR Length",             group="Risk")
+atrMult    = input.float(1.5, "Stop (ATR x)",         group="Risk", step=0.1)
+tpRR       = input.float(2.0, "Take Profit (R)",      group="Risk", step=0.1, tooltip="Reward-to-risk ratio for take profit")
+beR        = input.float(1.0, "Break-Even After (R)", group="Risk", step=0.1, tooltip="Move stop to entry after this many R in profit")
+
+fvgMinTicks = input.int(0,  "Min FVG Size (ticks)",  group="FVG",  minval=0, tooltip="Minimum gap size to qualify. 0 = any gap.")
+showFVG     = input.bool(true, "Show FVG Zones",      group="FVG")
+
+useObv     = input.bool(true, "OBV Confirmation",     group="Filters", tooltip="Require OBV above/below its MA to confirm entry direction")
+obvLen     = input.int(20,  "OBV MA Length",          group="Filters")
+
+showPanel  = input.bool(true, "Info Panel",           group="Display")
+
+// ── Calculations ─────────────────────────────────────────────────────────────
+ema = ta.ema(close, emaLen)
+sma = ta.sma(close, smaLen)
+atr = ta.atr(atrLen)
+
+bullTrend = ema > sma and close > ema
+bearTrend = ema < sma and close < ema
+
+obv   = ta.obv
+obvMa = ta.ema(obv, obvLen)
+obvOk(dir) => useObv ? (dir == 1 ? obv > obvMa : obv < obvMa) : true
+
+// Fair Value Gap — 3-bar gap pattern
+minGap   = fvgMinTicks * syminfo.mintick
+bullFVG  = low > high[2] + minGap
+bearFVG  = high < low[2] - minGap
+
+longEntry  = bullFVG and bullTrend and obvOk(1)
+shortEntry = bearFVG and bearTrend and obvOk(-1)
+
+// ── Stop / Target tracking ───────────────────────────────────────────────────
+var float entryStop   = na
+var float entryTarget = na
+var bool  beTriggered = false
+
+stopDist   = atr * atrMult
+longStop   = close - stopDist
+longTarget = close + stopDist * tpRR
+shortStop  = close + stopDist
+shortTarget = close - stopDist * tpRR
+
+if longEntry and strategy.position_size == 0
+    entryStop    := longStop
+    entryTarget  := longTarget
+    beTriggered  := false
+    strategy.entry("Long", strategy.long)
+    strategy.exit("L-Exit", "Long", stop=entryStop, limit=entryTarget)
+
+if shortEntry and strategy.position_size == 0
+    entryStop    := shortStop
+    entryTarget  := shortTarget
+    beTriggered  := false
+    strategy.entry("Short", strategy.short)
+    strategy.exit("S-Exit", "Short", stop=entryStop, limit=entryTarget)
+
+// Break-even: move stop to entry after beR × risk in profit
+if strategy.position_size > 0 and not beTriggered
+    beLevel = strategy.position_avg_price + math.abs(strategy.position_avg_price - entryStop) * beR
+    if high >= beLevel
+        beTriggered := true
+        strategy.exit("L-BE", "Long", stop=strategy.position_avg_price, limit=entryTarget)
+
+if strategy.position_size < 0 and not beTriggered
+    beLevel = strategy.position_avg_price - math.abs(entryStop - strategy.position_avg_price) * beR
+    if low <= beLevel
+        beTriggered := true
+        strategy.exit("S-BE", "Short", stop=strategy.position_avg_price, limit=entryTarget)
+
+if strategy.position_size == 0
+    entryStop   := na
+    entryTarget := na
+    beTriggered := false
+
+// ── Plots ────────────────────────────────────────────────────────────────────
+plot(ema, "EMA", color=#FF6B35, linewidth=1)
+plot(sma, "SMA", color=#00D4AA, linewidth=1)
+
+// FVG boxes
+var box[] fvgBoxes = array.new<box>()
+
+if showFVG and bullFVG
+    b = box.new(bar_index - 2, high[2], bar_index + 30, low,
+         border_color=color.new(#26A69A, 50), bgcolor=color.new(#26A69A, 85))
+    array.push(fvgBoxes, b)
+
+if showFVG and bearFVG
+    b = box.new(bar_index - 2, high, bar_index + 30, low[2],
+         border_color=color.new(#EF5350, 50), bgcolor=color.new(#EF5350, 85))
+    array.push(fvgBoxes, b)
+
+if array.size(fvgBoxes) > 30
+    box.delete(array.shift(fvgBoxes))
+
+// Entry labels
+if longEntry
+    label.new(bar_index, low,  "FVG↑", color=#26A69A, textcolor=color.white, style=label.style_label_up,   size=size.small)
+if shortEntry
+    label.new(bar_index, high, "FVG↓", color=#EF5350, textcolor=color.white, style=label.style_label_down, size=size.small)
+
+// Break-even marker
+if beTriggered and strategy.position_size != 0
+    line.new(bar_index - 1, strategy.position_avg_price, bar_index, strategy.position_avg_price,
+         color=color.yellow, style=line.style_dashed, width=1)
+
+// ── Panel ────────────────────────────────────────────────────────────────────
+if showPanel and barstate.islast
+    t = table.new(position.top_right, 2, 6,
+         border_width=1, border_color=color.new(color.gray, 70),
+         frame_width=1,  frame_color=color.new(color.gray, 50))
+
+    table.cell(t, 0, 0, "WYLD System", bgcolor=#1E1E2E, text_color=color.white, text_size=size.small, text_halign=text.align_center)
+    table.cell(t, 1, 0, "",            bgcolor=#1E1E2E)
+
+    trendTxt = bullTrend ? "BULL ▲" : bearTrend ? "BEAR ▼" : "FLAT —"
+    trendClr = bullTrend ? #26A69A  : bearTrend ? #EF5350  : color.gray
+    table.cell(t, 0, 1, "Trend",   bgcolor=#13131F, text_color=color.gray, text_size=size.small)
+    table.cell(t, 1, 1, trendTxt,  bgcolor=#13131F, text_color=trendClr,   text_size=size.small)
+
+    obvTxt = obv > obvMa ? "BULL ▲" : "BEAR ▼"
+    obvClr = obv > obvMa ? #26A69A : #EF5350
+    table.cell(t, 0, 2, "OBV",    bgcolor=#13131F, text_color=color.gray, text_size=size.small)
+    table.cell(t, 1, 2, obvTxt,   bgcolor=#13131F, text_color=obvClr,     text_size=size.small)
+
+    table.cell(t, 0, 3, "ATR",    bgcolor=#13131F, text_color=color.gray, text_size=size.small)
+    table.cell(t, 1, 3, str.tostring(atr, format.mintick), bgcolor=#13131F, text_color=color.white, text_size=size.small)
+
+    table.cell(t, 0, 4, "Stop",   bgcolor=#13131F, text_color=color.gray, text_size=size.small)
+    table.cell(t, 1, 4, str.tostring(atr * atrMult, format.mintick), bgcolor=#13131F, text_color=#EF5350, text_size=size.small)
+
+    beTxt = beTriggered ? "ACTIVE ✓" : "PENDING"
+    beClr = beTriggered ? #26A69A : color.gray
+    table.cell(t, 0, 5, "B/E",    bgcolor=#13131F, text_color=color.gray, text_size=size.small)
+    table.cell(t, 1, 5, beTxt,    bgcolor=#13131F, text_color=beClr,      text_size=size.small)
+
+// ── Alerts ───────────────────────────────────────────────────────────────────
+alertcondition(longEntry,  "FVG Long",  "WYLD: Bullish FVG entry")
+alertcondition(shortEntry, "FVG Short", "WYLD: Bearish FVG entry")
