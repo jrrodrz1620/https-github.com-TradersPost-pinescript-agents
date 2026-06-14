@@ -59,6 +59,12 @@ if longEntry and strategy.position_size == 0
     beTriggered  := false
     strategy.entry("Long", strategy.long)
     strategy.exit("L-Exit", "Long", stop=entryStop, limit=entryTarget)
+    alert("🟢 WYLD LONG  | " + syminfo.ticker +
+          "\nEntry:  " + str.tostring(close,       format.mintick) +
+          "\nStop:   " + str.tostring(longStop,    format.mintick) +
+          "\nTarget: " + str.tostring(longTarget,  format.mintick) +
+          "\nRisk:   " + str.tostring(stopDist,    format.mintick) + " pts",
+          alert.freq_once_per_bar)
 
 if shortEntry and strategy.position_size == 0
     entryStop    := shortStop
@@ -66,6 +72,12 @@ if shortEntry and strategy.position_size == 0
     beTriggered  := false
     strategy.entry("Short", strategy.short)
     strategy.exit("S-Exit", "Short", stop=entryStop, limit=entryTarget)
+    alert("🔴 WYLD SHORT | " + syminfo.ticker +
+          "\nEntry:  " + str.tostring(close,        format.mintick) +
+          "\nStop:   " + str.tostring(shortStop,    format.mintick) +
+          "\nTarget: " + str.tostring(shortTarget,  format.mintick) +
+          "\nRisk:   " + str.tostring(stopDist,     format.mintick) + " pts",
+          alert.freq_once_per_bar)
 
 // Break-even: move stop to entry after beR × risk in profit
 if strategy.position_size > 0 and not beTriggered
@@ -146,6 +158,4 @@ if showPanel and barstate.islast
     table.cell(t, 0, 5, "B/E",    bgcolor=#13131F, text_color=color.gray, text_size=size.small)
     table.cell(t, 1, 5, beTxt,    bgcolor=#13131F, text_color=beClr,      text_size=size.small)
 
-// ── Alerts ───────────────────────────────────────────────────────────────────
-alertcondition(longEntry,  "FVG Long",  "WYLD: Bullish FVG entry")
-alertcondition(shortEntry, "FVG Short", "WYLD: Bearish FVG entry")
+// Alerts fire via alert() above — set up in TradingView using "alert() function calls" condition
