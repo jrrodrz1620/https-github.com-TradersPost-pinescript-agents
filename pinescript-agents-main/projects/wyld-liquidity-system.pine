@@ -5,19 +5,20 @@ strategy("WYLD Liquidity System", overlay=true,
      calc_on_every_tick=true)
 
 // ── Inputs ───────────────────────────────────────────────────────────────────
-emaLen     = input.int(9,   "EMA Length",             group="Trend")
-smaLen     = input.int(20,  "SMA Length",             group="Trend")
+// NQ 3-min optimized defaults
+emaLen     = input.int(8,   "EMA Length",             group="Trend", tooltip="8 EMA — fast response to NQ momentum")
+smaLen     = input.int(21,  "SMA Length",             group="Trend", tooltip="21 SMA — key intraday trend level on NQ")
 
 atrLen     = input.int(14,  "ATR Length",             group="Risk")
-atrMult    = input.float(1.5, "Stop (ATR x)",         group="Risk", step=0.1)
-tpRR       = input.float(2.0, "Take Profit (R)",      group="Risk", step=0.1, tooltip="Reward-to-risk ratio for take profit")
-beR        = input.float(1.0, "Break-Even After (R)", group="Risk", step=0.1, tooltip="Move stop to entry after this many R in profit")
+atrMult    = input.float(1.0, "Stop (ATR x)",         group="Risk", step=0.1, tooltip="1.0 ATR keeps stops tight on fast NQ 3-min moves")
+tpRR       = input.float(1.5, "Take Profit (R)",      group="Risk", step=0.1, tooltip="1.5R is more achievable on NQ intraday scalps")
+beR        = input.float(0.75, "Break-Even After (R)", group="Risk", step=0.1, tooltip="Move to B/E faster on NQ to protect against quick reversals")
 
-fvgMinTicks = input.int(0,  "Min FVG Size (ticks)",  group="FVG",  minval=0, tooltip="Minimum gap size to qualify. 0 = any gap.")
+fvgMinTicks = input.int(4,  "Min FVG Size (ticks)",  group="FVG",  minval=0, tooltip="4 ticks = 1 NQ point — filters micro-gaps that don't mean anything")
 showFVG     = input.bool(true, "Show FVG Zones",      group="FVG")
 
 useObv     = input.bool(true, "OBV Confirmation",     group="Filters", tooltip="Require OBV above/below its MA to confirm entry direction")
-obvLen     = input.int(20,  "OBV MA Length",          group="Filters")
+obvLen     = input.int(14,  "OBV MA Length",          group="Filters", tooltip="Faster OBV MA for 3-min NQ")
 
 showPanel  = input.bool(true, "Info Panel",           group="Display")
 
