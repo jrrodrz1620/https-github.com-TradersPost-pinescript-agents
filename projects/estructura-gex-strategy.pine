@@ -41,6 +41,7 @@ wall_buffer = input.float(15.0, "Buffer cercania a wall (pts)", minval=0.0, grou
 // === INPUTS: REGIME ===
 reg_group   = "Regimen GEX"
 regime_mode = input.string("Auto (vs Gamma Flip)", "Modo de regimen", options=["Auto (vs Gamma Flip)", "Forzar positivo", "Forzar negativo"], group=reg_group, tooltip="Auto: positivo si precio > Gamma Flip. Si Gamma Flip = 0, usa el modo forzado.")
+rev_source  = input.string("Manual GEX (vivo)", "Fuente de niveles de reversion", options=["Manual GEX (vivo)", "PDH/PDL (backtest)"], group=reg_group, tooltip="Manual: usa las walls que escribes (para operar en vivo con GEX real). PDH/PDL: usa el maximo/minimo del dia anterior como proxy backtesteable de las walls.")
 
 // === INPUTS: STRUCTURE ===
 str_group     = "Estructura"
@@ -169,16 +170,26 @@ choch_bear = low_break  and ms.trend == "bullish"
 new_break_up   = (bos_bull or choch_bull) and not (bos_bull[1] or choch_bull[1])
 new_break_down = (bos_bear or choch_bear) and not (bos_bear[1] or choch_bear[1])
 
+// === REVERSION LEVELS (Manual GEX vs proxy PDH/PDL) ===
+// PDH/PDL = maximo/minimo del dia anterior (proxy backtesteable de las walls).
+// high[1]/low[1] + lookahead_off => sin sesgo de futuro (no repinta).
+use_pdhl = rev_source == "PDH/PDL (backtest)"
+pdh = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_off)
+pdl = request.security(syminfo.tickerid, "D", low[1],  lookahead=barmerge.lookahead_off)
+eff_call = use_pdhl ? pdh : call_wall          // nivel superior (resistencia)
+eff_put  = use_pdhl ? pdl : put_wall           // nivel inferior (soporte)
+eff_flip = use_pdhl ? (pdh + pdl) / 2 : gamma_flip
+
 // === GEX REGIME ===
-has_flip = gamma_flip > 0.0
+has_flip = use_pdhl ? true : gamma_flip > 0.0
 gex_positive = switch regime_mode
     "Forzar positivo" => true
     "Forzar negativo" => false
-    => has_flip ? close > gamma_flip : true  // auto; sin flip asume rango
+    => has_flip ? close > eff_flip : true  // auto; sin flip asume rango
 
 // === GEX PROXIMITY ===
-near_call = call_wall > 0.0 and math.abs(close - call_wall) <= wall_buffer
-near_put  = put_wall  > 0.0 and math.abs(close - put_wall)  <= wall_buffer
+near_call = eff_call > 0.0 and math.abs(close - eff_call) <= wall_buffer
+near_put  = eff_put  > 0.0 and math.abs(close - eff_put)  <= wall_buffer
 
 // === SIGNAL LOGIC ===
 // Regimen POSITIVO (rango): fade en walls usando reversiones (CHoCH).
@@ -242,7 +253,7 @@ if strategy.position_size != 0 and ((flat_on_close and sess_ending) or loss_hit 
 // === EXECUTION ===
 if go_long and strategy.position_size <= 0
     sl = close - atr * sl_mult
-    tp = use_wall_tp and gex_positive and call_wall > 0.0 ? call_wall : close + atr * tp_mult
+    tp = use_wall_tp and gex_positive and eff_call > 0.0 ? eff_call : close + atr * tp_mult
     strategy.entry("Long", strategy.long, alert_message = tp_enable ? tp_msg("buy") : "")
     strategy.exit("Long TP/SL", "Long", stop=sl, limit=tp, alert_message = tp_enable ? tp_msg("exit") : "")
     trades_today += 1
@@ -250,16 +261,16 @@ if go_long and strategy.position_size <= 0
 
 if go_short and strategy.position_size >= 0
     sl = close + atr * sl_mult
-    tp = use_wall_tp and gex_positive and put_wall > 0.0 ? put_wall : close - atr * tp_mult
+    tp = use_wall_tp and gex_positive and eff_put > 0.0 ? eff_put : close - atr * tp_mult
     strategy.entry("Short", strategy.short, alert_message = tp_enable ? tp_msg("sell") : "")
     strategy.exit("Short TP/SL", "Short", stop=sl, limit=tp, alert_message = tp_enable ? tp_msg("exit") : "")
     trades_today += 1
     create_label(high, gex_positive ? "CHoCH- (rev)" : "BOS- (tend)", color.new(color.red, 0), false)
 
 // === DRAW GEX LEVELS ===
-plot(show_levels and call_wall  > 0.0 ? call_wall  : na, "Call Wall",  color.new(color.red, 0),    2, plot.style_linebr)
-plot(show_levels and put_wall   > 0.0 ? put_wall   : na, "Put Wall",   color.new(color.green, 0),   2, plot.style_linebr)
-plot(show_levels and gamma_flip > 0.0 ? gamma_flip : na, "Gamma Flip", color.new(color.orange, 0),  2, plot.style_linebr)
+plot(show_levels and eff_call > 0.0 ? eff_call : na, use_pdhl ? "PDH (resist.)" : "Call Wall",  color.new(color.red, 0),    2, plot.style_linebr)
+plot(show_levels and eff_put  > 0.0 ? eff_put  : na, use_pdhl ? "PDL (soporte)" : "Put Wall",   color.new(color.green, 0),   2, plot.style_linebr)
+plot(show_levels and eff_flip > 0.0 ? eff_flip : na, use_pdhl ? "Mid PDH/PDL"   : "Gamma Flip", color.new(color.orange, 0),  2, plot.style_linebr)
 plot(use_trend ? trend_ema : na, "EMA tendencia", color.new(color.purple, 0), 1)
 
 // Tinte de fondo cuando estamos fuera de la sesion permitida.
