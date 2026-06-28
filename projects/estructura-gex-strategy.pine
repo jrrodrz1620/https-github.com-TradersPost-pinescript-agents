@@ -13,6 +13,9 @@
 //          subyacente. TradingView NO entrega GEX nativo: los niveles
 //          (Call Wall, Put Wall, Gamma Flip) se introducen a mano cada dia
 //          desde un proveedor externo (CBOE, etc.).
+//          Incluye filtro de sesion NQ (zona horaria + RTH, cierre al fin de
+//          sesion) y guardas diarias tipo prop-firm (max trades, limite de
+//          perdida y objetivo de ganancia con stop del trading diario).
 // ============================================================================
 
 strategy("Estructura+ GEX", "EST+GEX", overlay=true,
@@ -42,6 +45,20 @@ atr_len     = input.int(14, "ATR Length", minval=1, group=risk_group)
 sl_mult     = input.float(1.5, "Stop Loss (x ATR)", minval=0.1, step=0.1, group=risk_group)
 tp_mult     = input.float(2.5, "Take Profit (x ATR)", minval=0.1, step=0.1, group=risk_group)
 use_wall_tp = input.bool(true, "Usar wall opuesta como TP (reversion)", group=risk_group, tooltip="En regimen positivo, busca como objetivo la wall opuesta en lugar del TP por ATR.")
+
+// === INPUTS: SESSION (NQ) ===
+sess_group   = "Sesion NQ"
+use_session  = input.bool(true, "Operar solo en sesion", group=sess_group)
+session_tz   = input.string("America/New_York", "Zona horaria", group=sess_group, tooltip="Zona horaria de la sesion (NQ/ES = America/New_York).")
+session_spec = input.session("0930-1600", "Ventana de sesion (RTH)", group=sess_group, tooltip="Horario en el que se permiten entradas. RTH NQ = 0930-1600.")
+flat_on_close= input.bool(true, "Cerrar todo al fin de sesion", group=sess_group, tooltip="Liquida cualquier posicion abierta cuando termina la ventana.")
+
+// === INPUTS: DAILY LIMITS (prop-firm) ===
+lim_group    = "Limites diarios"
+use_limits   = input.bool(true, "Activar limites diarios", group=lim_group)
+max_trades   = input.int(3, "Max trades por dia", minval=1, group=lim_group, tooltip="Deja de abrir nuevas operaciones tras N entradas en el dia.")
+daily_loss   = input.float(500.0, "Limite de perdida diaria ($)", minval=0.0, step=50, group=lim_group, tooltip="Si la perdida del dia alcanza este monto, se detiene el trading. 0 = desactivado.")
+daily_target = input.float(0.0, "Objetivo de ganancia diaria ($)", minval=0.0, step=50, group=lim_group, tooltip="Si la ganancia del dia alcanza este monto, se detiene el trading. 0 = desactivado.")
 
 // === INPUTS: DISPLAY ===
 disp_group  = "Display"
@@ -138,11 +155,40 @@ short_reversion = gex_positive and choch_bear and near_call
 long_trend  = not gex_positive and bos_bull and new_break_up
 short_trend = not gex_positive and bos_bear and new_break_down
 
-go_long  = (long_reversion or long_trend) and new_break_up
-go_short = (short_reversion or short_trend) and new_break_down
+raw_long  = (long_reversion or long_trend) and new_break_up
+raw_short = (short_reversion or short_trend) and new_break_down
+
+// === SESSION FILTER (NQ) ===
+in_session  = not na(time(timeframe.period, session_spec, session_tz))
+sess_ok     = not use_session or in_session
+sess_ending = use_session and not in_session and in_session[1]  // RTH -> fuera
+
+// === DAILY LIMITS (prop-firm) ===
+new_day = ta.change(time("D")) != 0
+var int   trades_today   = 0
+var float day_start_eq   = strategy.equity
+if new_day
+    trades_today := 0
+    day_start_eq := strategy.equity
+
+day_pnl       = strategy.equity - day_start_eq
+loss_hit      = use_limits and daily_loss   > 0.0 and day_pnl <= -daily_loss
+target_hit    = use_limits and daily_target > 0.0 and day_pnl >=  daily_target
+trades_capped = use_limits and trades_today >= max_trades
+limits_ok     = not (loss_hit or target_hit or trades_capped)
+
+can_trade = sess_ok and limits_ok
+
+go_long  = raw_long  and can_trade
+go_short = raw_short and can_trade
 
 // === RISK ===
 atr = ta.atr(atr_len)
+
+// === SESSION / LIMIT EXITS ===
+// Cierre forzado al terminar la sesion o al tocar el limite de perdida/objetivo.
+if strategy.position_size != 0 and ((flat_on_close and sess_ending) or loss_hit or target_hit)
+    strategy.close_all(comment="Flat (sesion/limite)")
 
 // === EXECUTION ===
 if go_long and strategy.position_size <= 0
@@ -150,6 +196,7 @@ if go_long and strategy.position_size <= 0
     tp = use_wall_tp and gex_positive and call_wall > 0.0 ? call_wall : close + atr * tp_mult
     strategy.entry("Long", strategy.long)
     strategy.exit("Long TP/SL", "Long", stop=sl, limit=tp)
+    trades_today += 1
     create_label(low, gex_positive ? "CHoCH+ (rev)" : "BOS+ (tend)", color.new(color.lime, 0), true)
 
 if go_short and strategy.position_size >= 0
@@ -157,6 +204,7 @@ if go_short and strategy.position_size >= 0
     tp = use_wall_tp and gex_positive and put_wall > 0.0 ? put_wall : close - atr * tp_mult
     strategy.entry("Short", strategy.short)
     strategy.exit("Short TP/SL", "Short", stop=sl, limit=tp)
+    trades_today += 1
     create_label(high, gex_positive ? "CHoCH- (rev)" : "BOS- (tend)", color.new(color.red, 0), false)
 
 // === DRAW GEX LEVELS ===
@@ -164,10 +212,15 @@ plot(show_levels and call_wall  > 0.0 ? call_wall  : na, "Call Wall",  color.new
 plot(show_levels and put_wall   > 0.0 ? put_wall   : na, "Put Wall",   color.new(color.green, 0),   2, plot.style_linebr)
 plot(show_levels and gamma_flip > 0.0 ? gamma_flip : na, "Gamma Flip", color.new(color.orange, 0),  2, plot.style_linebr)
 
+// Tinte de fondo cuando estamos fuera de la sesion permitida.
+bgcolor(use_session and not in_session ? color.new(color.gray, 90) : na, title="Fuera de sesion")
+
 // === STATUS PANEL ===
 // La doc v6 exige declarar la tabla con `var` en scope global y poblar las
 // celdas dentro de `if barstate.islast`.
-var table t = table.new(position.top_right, 2, 5, border_width=1)
+status_txt = not limits_ok ? (loss_hit ? "STOP perdida" : target_hit ? "STOP objetivo" : "STOP max trades") : not sess_ok ? "Fuera sesion" : "Operando"
+status_col = can_trade ? color.lime : color.red
+var table t = table.new(position.top_right, 2, 8, border_width=1)
 if show_table and barstate.islast
     table.cell(t, 0, 0, "Estructura+ GEX", text_color=color.white, bgcolor=color.new(color.blue, 0))
     table.cell(t, 1, 0, "",                text_color=color.white, bgcolor=color.new(color.blue, 0))
@@ -179,6 +232,12 @@ if show_table and barstate.islast
     table.cell(t, 1, 3, near_call ? "SI" : "no", text_color=near_call ? color.red : color.gray)
     table.cell(t, 0, 4, "Cerca Put",  text_color=color.white)
     table.cell(t, 1, 4, near_put ? "SI" : "no",  text_color=near_put ? color.green : color.gray)
+    table.cell(t, 0, 5, "Trades hoy", text_color=color.white)
+    table.cell(t, 1, 5, str.tostring(trades_today) + " / " + str.tostring(max_trades), text_color=trades_capped ? color.red : color.white)
+    table.cell(t, 0, 6, "P&L dia",    text_color=color.white)
+    table.cell(t, 1, 6, str.tostring(day_pnl, "#.##") + " $", text_color=day_pnl >= 0 ? color.lime : color.red)
+    table.cell(t, 0, 7, "Estado",     text_color=color.white)
+    table.cell(t, 1, 7, status_txt,   text_color=status_col)
 
 // === ALERTS ===
 alertcondition(go_long,  "EST+GEX Long",  "Estructura+ GEX: senal LONG")
