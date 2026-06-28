@@ -16,6 +16,10 @@
 //          Incluye filtro de sesion NQ (zona horaria + RTH, cierre al fin de
 //          sesion) y guardas diarias tipo prop-firm (max trades, limite de
 //          perdida y objetivo de ganancia con stop del trading diario).
+//          Automatizacion: cada orden emite un JSON compatible con TradersPost
+//          via alert_message. Crear UNA alerta de estrategia ("Order fills
+//          only") con mensaje  {{strategy.order.alert_message}}  y la URL
+//          webhook de TradersPost.
 // ============================================================================
 
 strategy("Estructura+ GEX", "EST+GEX", overlay=true,
@@ -76,6 +80,15 @@ disp_group  = "Display"
 show_levels = input.bool(true, "Dibujar niveles GEX", group=disp_group)
 show_labels = input.bool(true, "Mostrar etiquetas BOS/CHoCH", group=disp_group)
 show_table  = input.bool(true, "Mostrar panel de estado", group=disp_group)
+
+// === INPUTS: TRADERSPOST (webhook JSON) ===
+// Para automatizar: crea UNA alerta sobre la estrategia, condicion
+// "Order fills only", y en el mensaje pon  {{strategy.order.alert_message}}
+// con la URL webhook de TradersPost. Cada orden enviara su propio JSON.
+tp_group  = "TradersPost (webhook)"
+tp_enable = input.bool(true, "Generar mensajes JSON TradersPost", group=tp_group)
+tp_ticker = input.string("", "Ticker override (vacio = simbolo grafico)", group=tp_group, tooltip="Simbolo que TradersPost mapea a tu broker. Vacio usa syminfo.ticker.")
+tp_qty    = input.int(1, "Cantidad (contratos)", minval=1, group=tp_group)
 
 // === TYPES ===
 type SwingPoint
@@ -199,25 +212,32 @@ go_short = raw_short and can_trade
 // === RISK ===
 atr = ta.atr(atr_len)
 
+// === TRADERSPOST JSON ===
+// Los placeholders {{...}} NO se expanden dentro de alert_message, asi que el
+// JSON se construye con valores reales (str.tostring).
+tp_symbol = tp_ticker == "" ? syminfo.ticker : tp_ticker
+tp_msg(action) =>
+    '{"ticker":"' + tp_symbol + '","action":"' + action + '","quantity":' + str.tostring(tp_qty) + ',"price":' + str.tostring(close) + ',"signal":"Estructura+ GEX"}'
+
 // === SESSION / LIMIT EXITS ===
 // Cierre forzado al terminar la sesion o al tocar el limite de perdida/objetivo.
 if strategy.position_size != 0 and ((flat_on_close and sess_ending) or loss_hit or target_hit)
-    strategy.close_all(comment="Flat (sesion/limite)")
+    strategy.close_all(comment="Flat (sesion/limite)", alert_message = tp_enable ? tp_msg("exit") : "")
 
 // === EXECUTION ===
 if go_long and strategy.position_size <= 0
     sl = close - atr * sl_mult
     tp = use_wall_tp and gex_positive and call_wall > 0.0 ? call_wall : close + atr * tp_mult
-    strategy.entry("Long", strategy.long)
-    strategy.exit("Long TP/SL", "Long", stop=sl, limit=tp)
+    strategy.entry("Long", strategy.long, alert_message = tp_enable ? tp_msg("buy") : "")
+    strategy.exit("Long TP/SL", "Long", stop=sl, limit=tp, alert_message = tp_enable ? tp_msg("exit") : "")
     trades_today += 1
     create_label(low, gex_positive ? "CHoCH+ (rev)" : "BOS+ (tend)", color.new(color.lime, 0), true)
 
 if go_short and strategy.position_size >= 0
     sl = close + atr * sl_mult
     tp = use_wall_tp and gex_positive and put_wall > 0.0 ? put_wall : close - atr * tp_mult
-    strategy.entry("Short", strategy.short)
-    strategy.exit("Short TP/SL", "Short", stop=sl, limit=tp)
+    strategy.entry("Short", strategy.short, alert_message = tp_enable ? tp_msg("sell") : "")
+    strategy.exit("Short TP/SL", "Short", stop=sl, limit=tp, alert_message = tp_enable ? tp_msg("exit") : "")
     trades_today += 1
     create_label(high, gex_positive ? "CHoCH- (rev)" : "BOS- (tend)", color.new(color.red, 0), false)
 
