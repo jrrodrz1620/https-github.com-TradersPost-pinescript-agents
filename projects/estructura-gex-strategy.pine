@@ -60,6 +60,17 @@ max_trades   = input.int(3, "Max trades por dia", minval=1, group=lim_group, too
 daily_loss   = input.float(500.0, "Limite de perdida diaria ($)", minval=0.0, step=50, group=lim_group, tooltip="Si la perdida del dia alcanza este monto, se detiene el trading. 0 = desactivado.")
 daily_target = input.float(0.0, "Objetivo de ganancia diaria ($)", minval=0.0, step=50, group=lim_group, tooltip="Si la ganancia del dia alcanza este monto, se detiene el trading. 0 = desactivado.")
 
+// === INPUTS: BACKTEST WINDOW ===
+// Para optimizar/walk-forward exporta la lista de trades (Strategy Tester ->
+// Export) y subela al analizador nq-walkforward (app.py).
+// Parametros optimizables sugeridos y rangos de partida:
+//   swing_length 3..15 | sl_mult 1.0..3.0 | tp_mult 1.5..4.0 |
+//   wall_buffer 5..40 (segun ATR de NQ) | session_spec (RTH vs killzones).
+bt_group   = "Backtest"
+use_dates  = input.bool(false, "Filtrar por rango de fechas", group=bt_group)
+start_date = input.time(timestamp("2024-01-01 00:00"), "Desde", group=bt_group)
+end_date   = input.time(timestamp("2026-12-31 23:59"), "Hasta", group=bt_group)
+
 // === INPUTS: DISPLAY ===
 disp_group  = "Display"
 show_levels = input.bool(true, "Dibujar niveles GEX", group=disp_group)
@@ -177,7 +188,10 @@ target_hit    = use_limits and daily_target > 0.0 and day_pnl >=  daily_target
 trades_capped = use_limits and trades_today >= max_trades
 limits_ok     = not (loss_hit or target_hit or trades_capped)
 
-can_trade = sess_ok and limits_ok
+// === BACKTEST WINDOW ===
+in_window = not use_dates or (time >= start_date and time <= end_date)
+
+can_trade = sess_ok and limits_ok and in_window
 
 go_long  = raw_long  and can_trade
 go_short = raw_short and can_trade
