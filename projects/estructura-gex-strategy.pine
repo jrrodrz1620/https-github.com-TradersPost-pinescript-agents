@@ -165,8 +165,10 @@ plot(show_levels and put_wall   > 0.0 ? put_wall   : na, "Put Wall",   color.new
 plot(show_levels and gamma_flip > 0.0 ? gamma_flip : na, "Gamma Flip", color.new(color.orange, 0),  2, plot.style_linebr)
 
 // === STATUS PANEL ===
+// La doc v6 exige declarar la tabla con `var` en scope global y poblar las
+// celdas dentro de `if barstate.islast`.
+var table t = table.new(position.top_right, 2, 5, border_width=1)
 if show_table and barstate.islast
-    var table t = table.new(position.top_right, 2, 5, border_width=1)
     table.cell(t, 0, 0, "Estructura+ GEX", text_color=color.white, bgcolor=color.new(color.blue, 0))
     table.cell(t, 1, 0, "",                text_color=color.white, bgcolor=color.new(color.blue, 0))
     table.cell(t, 0, 1, "Tendencia",  text_color=color.white)
