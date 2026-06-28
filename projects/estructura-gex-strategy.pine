@@ -200,9 +200,6 @@ short_reversion = gex_positive and choch_bear and near_call
 long_trend  = not gex_positive and bos_bull and new_break_up
 short_trend = not gex_positive and bos_bear and new_break_down
 
-raw_long  = (long_reversion or long_trend) and new_break_up
-raw_short = (short_reversion or short_trend) and new_break_down
-
 // === SESSION FILTER (NQ) ===
 in_session  = not na(time(timeframe.period, session_spec, session_tz))
 sess_ok     = not use_session or in_session
@@ -228,12 +225,15 @@ in_window = not use_dates or (time >= start_date and time <= end_date)
 can_trade = sess_ok and limits_ok and in_window
 
 // === TREND FILTER ===
+// El filtro EMA se aplica SOLO a los trades de tendencia (BOS). Las
+// reversiones (fade en walls) NO se filtran por EMA, asi en modo Auto cada
+// motor usa su ajuste optimo: reversion sin filtro, tendencia con filtro.
 trend_ema = ta.ema(close, trend_len)
 trend_up  = not use_trend or close > trend_ema
 trend_dn  = not use_trend or close < trend_ema
 
-go_long  = raw_long  and can_trade and trend_up
-go_short = raw_short and can_trade and trend_dn
+go_long  = (long_reversion or (long_trend and trend_up)) and can_trade and new_break_up
+go_short = (short_reversion or (short_trend and trend_dn)) and can_trade and new_break_down
 
 // === RISK ===
 atr = ta.atr(atr_len)
