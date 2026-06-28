@@ -46,6 +46,13 @@ regime_mode = input.string("Auto (vs Gamma Flip)", "Modo de regimen", options=["
 str_group     = "Estructura"
 swing_length  = input.int(5, "Swing Length", minval=2, maxval=50, group=str_group, tooltip="Lookback de pivotes para los swings.")
 
+// === INPUTS: TREND FILTER ===
+// Solo opera a favor de la tendencia general (precio vs EMA larga). Filtra
+// rupturas contra-tendencia, que suelen ser las mas falsas -> sube el win rate.
+trend_group = "Filtro de tendencia"
+use_trend   = input.bool(true, "Operar solo a favor de la EMA", group=trend_group)
+trend_len   = input.int(200, "EMA de tendencia", minval=20, group=trend_group, tooltip="Longs solo por encima de la EMA; shorts solo por debajo.")
+
 // === INPUTS: RISK ===
 risk_group  = "Gestion de riesgo"
 atr_len     = input.int(14, "ATR Length", minval=1, group=risk_group)
@@ -209,8 +216,13 @@ in_window = not use_dates or (time >= start_date and time <= end_date)
 
 can_trade = sess_ok and limits_ok and in_window
 
-go_long  = raw_long  and can_trade
-go_short = raw_short and can_trade
+// === TREND FILTER ===
+trend_ema = ta.ema(close, trend_len)
+trend_up  = not use_trend or close > trend_ema
+trend_dn  = not use_trend or close < trend_ema
+
+go_long  = raw_long  and can_trade and trend_up
+go_short = raw_short and can_trade and trend_dn
 
 // === RISK ===
 atr = ta.atr(atr_len)
@@ -248,6 +260,7 @@ if go_short and strategy.position_size >= 0
 plot(show_levels and call_wall  > 0.0 ? call_wall  : na, "Call Wall",  color.new(color.red, 0),    2, plot.style_linebr)
 plot(show_levels and put_wall   > 0.0 ? put_wall   : na, "Put Wall",   color.new(color.green, 0),   2, plot.style_linebr)
 plot(show_levels and gamma_flip > 0.0 ? gamma_flip : na, "Gamma Flip", color.new(color.orange, 0),  2, plot.style_linebr)
+plot(use_trend ? trend_ema : na, "EMA tendencia", color.new(color.purple, 0), 1)
 
 // Tinte de fondo cuando estamos fuera de la sesion permitida.
 bgcolor(use_session and not in_session ? color.new(color.gray, 90) : na, title="Fuera de sesion")
