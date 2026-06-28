@@ -22,10 +22,13 @@
 //          webhook de TradersPost.
 // ============================================================================
 
+// NOTA: en futuros (NQ/MNQ) el tamaño debe ir en CONTRATOS, no en % de
+// equity: 1 MNQ vale ~precio*2 USD, asi que un % pequeno redondea a 0
+// contratos y no se abre ninguna operacion.
 strategy("Estructura+ GEX", "EST+GEX", overlay=true,
-     default_qty_type=strategy.percent_of_equity, default_qty_value=10,
-     initial_capital=10000, commission_type=strategy.commission.percent,
-     commission_value=0.02, max_lines_count=100, max_labels_count=100,
+     default_qty_type=strategy.fixed, default_qty_value=1,
+     initial_capital=100000, commission_type=strategy.commission.cash_per_contract,
+     commission_value=0.85, max_lines_count=100, max_labels_count=100,
      calc_on_every_tick=false, process_orders_on_close=true)
 
 // === INPUTS: GEX LEVELS ===
