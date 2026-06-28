@@ -55,14 +55,14 @@ use_wall_tp = input.bool(true, "Usar wall opuesta como TP (reversion)", group=ri
 
 // === INPUTS: SESSION (NQ) ===
 sess_group   = "Sesion NQ"
-use_session  = input.bool(true, "Operar solo en sesion", group=sess_group)
+use_session  = input.bool(false, "Operar solo en sesion", group=sess_group)
 session_tz   = input.string("America/New_York", "Zona horaria", group=sess_group, tooltip="Zona horaria de la sesion (NQ/ES = America/New_York).")
 session_spec = input.session("0930-1600", "Ventana de sesion (RTH)", group=sess_group, tooltip="Horario en el que se permiten entradas. RTH NQ = 0930-1600.")
 flat_on_close= input.bool(true, "Cerrar todo al fin de sesion", group=sess_group, tooltip="Liquida cualquier posicion abierta cuando termina la ventana.")
 
 // === INPUTS: DAILY LIMITS (prop-firm) ===
 lim_group    = "Limites diarios"
-use_limits   = input.bool(true, "Activar limites diarios", group=lim_group)
+use_limits   = input.bool(false, "Activar limites diarios", group=lim_group)
 max_trades   = input.int(3, "Max trades por dia", minval=1, group=lim_group, tooltip="Deja de abrir nuevas operaciones tras N entradas en el dia.")
 daily_loss   = input.float(500.0, "Limite de perdida diaria ($)", minval=0.0, step=50, group=lim_group, tooltip="Si la perdida del dia alcanza este monto, se detiene el trading. 0 = desactivado.")
 daily_target = input.float(0.0, "Objetivo de ganancia diaria ($)", minval=0.0, step=50, group=lim_group, tooltip="Si la ganancia del dia alcanza este monto, se detiene el trading. 0 = desactivado.")
