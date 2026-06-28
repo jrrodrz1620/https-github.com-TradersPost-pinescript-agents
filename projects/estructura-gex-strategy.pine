@@ -56,8 +56,8 @@ trend_len   = input.int(200, "EMA de tendencia", minval=20, group=trend_group, t
 // === INPUTS: RISK ===
 risk_group  = "Gestion de riesgo"
 atr_len     = input.int(14, "ATR Length", minval=1, group=risk_group)
-sl_mult     = input.float(1.5, "Stop Loss (x ATR)", minval=0.1, step=0.1, group=risk_group)
-tp_mult     = input.float(2.5, "Take Profit (x ATR)", minval=0.1, step=0.1, group=risk_group)
+sl_mult     = input.float(1.2, "Stop Loss (x ATR)", minval=0.1, step=0.1, group=risk_group)
+tp_mult     = input.float(3.0, "Take Profit (x ATR)", minval=0.1, step=0.1, group=risk_group)
 use_wall_tp = input.bool(true, "Usar wall opuesta como TP (reversion)", group=risk_group, tooltip="En regimen positivo, busca como objetivo la wall opuesta en lugar del TP por ATR.")
 
 // === INPUTS: SESSION (NQ) ===
