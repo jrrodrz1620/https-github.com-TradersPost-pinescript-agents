@@ -268,9 +268,9 @@ if go_short and strategy.position_size >= 0
     create_label(high, gex_positive ? "CHoCH- (rev)" : "BOS- (tend)", color.new(color.red, 0), false)
 
 // === DRAW GEX LEVELS ===
-plot(show_levels and eff_call > 0.0 ? eff_call : na, use_pdhl ? "PDH (resist.)" : "Call Wall",  color.new(color.red, 0),    2, plot.style_linebr)
-plot(show_levels and eff_put  > 0.0 ? eff_put  : na, use_pdhl ? "PDL (soporte)" : "Put Wall",   color.new(color.green, 0),   2, plot.style_linebr)
-plot(show_levels and eff_flip > 0.0 ? eff_flip : na, use_pdhl ? "Mid PDH/PDL"   : "Gamma Flip", color.new(color.orange, 0),  2, plot.style_linebr)
+plot(show_levels and eff_call > 0.0 ? eff_call : na, "Resistencia (Call/PDH)", color.new(color.red, 0),    2, plot.style_linebr)
+plot(show_levels and eff_put  > 0.0 ? eff_put  : na, "Soporte (Put/PDL)",      color.new(color.green, 0),   2, plot.style_linebr)
+plot(show_levels and eff_flip > 0.0 ? eff_flip : na, "Flip / Mid",             color.new(color.orange, 0),  2, plot.style_linebr)
 plot(use_trend ? trend_ema : na, "EMA tendencia", color.new(color.purple, 0), 1)
 
 // Tinte de fondo cuando estamos fuera de la sesion permitida.
