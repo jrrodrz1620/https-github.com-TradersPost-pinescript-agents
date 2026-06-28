@@ -1,0 +1,305 @@
+//@version=6
+// ============================================================================
+// Project: Estructura+ GEX
+// Type:    Strategy
+// Idea:    Combina estructura de mercado (BOS / CHoCH) con niveles de Gamma
+//          Exposure (GEX) introducidos manualmente para filtrar las señales
+//          segun el "regimen" del mercado:
+//            - GEX positivo (precio > Gamma Flip): mercado en rango / reversion
+//                -> se operan reversiones (CHoCH) tipo fade en Call/Put Wall.
+//            - GEX negativo (precio < Gamma Flip): mercado tendencial / volatil
+//                -> se operan continuaciones (BOS) a favor de la tendencia.
+//          Pensado para indices (NQ / ES) donde el flujo de opciones mueve el
+//          subyacente. TradingView NO entrega GEX nativo: los niveles
+//          (Call Wall, Put Wall, Gamma Flip) se introducen a mano cada dia
+//          desde un proveedor externo (CBOE, etc.).
+//          Incluye filtro de sesion NQ (zona horaria + RTH, cierre al fin de
+//          sesion) y guardas diarias tipo prop-firm (max trades, limite de
+//          perdida y objetivo de ganancia con stop del trading diario).
+//          Automatizacion: cada orden emite un JSON compatible con TradersPost
+//          via alert_message. Crear UNA alerta de estrategia ("Order fills
+//          only") con mensaje  {{strategy.order.alert_message}}  y la URL
+//          webhook de TradersPost.
+// ============================================================================
+
+// NOTA: en futuros (NQ/MNQ) el tamaño debe ir en CONTRATOS, no en % de
+// equity: 1 MNQ vale ~precio*2 USD, asi que un % pequeno redondea a 0
+// contratos y no se abre ninguna operacion.
+strategy("Estructura+ GEX", "EST+GEX", overlay=true,
+     default_qty_type=strategy.fixed, default_qty_value=1,
+     initial_capital=100000, commission_type=strategy.commission.cash_per_contract,
+     commission_value=0.85, max_lines_count=100, max_labels_count=100,
+     calc_on_every_tick=false, process_orders_on_close=true)
+
+// === INPUTS: GEX LEVELS ===
+gex_group   = "GEX Levels (manuales)"
+call_wall   = input.float(0.0, "Call Wall (resistencia gamma)", group=gex_group, tooltip="Strike con mayor gamma de calls. Actua como techo. 0 = desactivado.")
+put_wall    = input.float(0.0, "Put Wall (soporte gamma)",     group=gex_group, tooltip="Strike con mayor gamma de puts. Actua como suelo. 0 = desactivado.")
+gamma_flip  = input.float(0.0, "Gamma Flip / Zero Gamma",      group=gex_group, tooltip="Nivel donde GEX cambia de signo. 0 = desactivado (usa modo manual de regimen).")
+wall_buffer = input.float(15.0, "Buffer cercania a wall (pts)", minval=0.0, group=gex_group, tooltip="Distancia en puntos para considerar el precio 'cerca' de una wall.")
+
+// === INPUTS: REGIME ===
+reg_group   = "Regimen GEX"
+regime_mode = input.string("Auto (vs Gamma Flip)", "Modo de regimen", options=["Auto (vs Gamma Flip)", "Forzar positivo", "Forzar negativo"], group=reg_group, tooltip="Auto: positivo si precio > Gamma Flip. Si Gamma Flip = 0, usa el modo forzado.")
+rev_source  = input.string("Manual GEX (vivo)", "Fuente de niveles de reversion", options=["Manual GEX (vivo)", "PDH/PDL (backtest)"], group=reg_group, tooltip="Manual: usa las walls que escribes (para operar en vivo con GEX real). PDH/PDL: usa el maximo/minimo del dia anterior como proxy backtesteable de las walls.")
+
+// === INPUTS: STRUCTURE ===
+str_group     = "Estructura"
+swing_length  = input.int(5, "Swing Length", minval=2, maxval=50, group=str_group, tooltip="Lookback de pivotes para los swings.")
+
+// === INPUTS: TREND FILTER ===
+// Solo opera a favor de la tendencia general (precio vs EMA larga). Filtra
+// rupturas contra-tendencia, que suelen ser las mas falsas -> sube el win rate.
+trend_group = "Filtro de tendencia"
+use_trend   = input.bool(true, "Operar solo a favor de la EMA", group=trend_group)
+trend_len   = input.int(200, "EMA de tendencia", minval=20, group=trend_group, tooltip="Longs solo por encima de la EMA; shorts solo por debajo.")
+
+// === INPUTS: RISK ===
+risk_group  = "Gestion de riesgo"
+atr_len     = input.int(14, "ATR Length", minval=1, group=risk_group)
+sl_mult     = input.float(1.2, "Stop Loss (x ATR)", minval=0.1, step=0.1, group=risk_group)
+tp_mult     = input.float(3.0, "Take Profit (x ATR)", minval=0.1, step=0.1, group=risk_group)
+use_wall_tp = input.bool(true, "Usar wall opuesta como TP (reversion)", group=risk_group, tooltip="En regimen positivo, busca como objetivo la wall opuesta en lugar del TP por ATR.")
+
+// === INPUTS: SESSION (NQ) ===
+sess_group   = "Sesion NQ"
+use_session  = input.bool(false, "Operar solo en sesion", group=sess_group)
+session_tz   = input.string("America/New_York", "Zona horaria", group=sess_group, tooltip="Zona horaria de la sesion (NQ/ES = America/New_York).")
+session_spec = input.session("0930-1600", "Ventana de sesion (RTH)", group=sess_group, tooltip="Horario en el que se permiten entradas. RTH NQ = 0930-1600.")
+flat_on_close= input.bool(true, "Cerrar todo al fin de sesion", group=sess_group, tooltip="Liquida cualquier posicion abierta cuando termina la ventana.")
+
+// === INPUTS: DAILY LIMITS (prop-firm) ===
+lim_group    = "Limites diarios"
+use_limits   = input.bool(false, "Activar limites diarios", group=lim_group)
+max_trades   = input.int(3, "Max trades por dia", minval=1, group=lim_group, tooltip="Deja de abrir nuevas operaciones tras N entradas en el dia.")
+daily_loss   = input.float(500.0, "Limite de perdida diaria ($)", minval=0.0, step=50, group=lim_group, tooltip="Si la perdida del dia alcanza este monto, se detiene el trading. 0 = desactivado.")
+daily_target = input.float(0.0, "Objetivo de ganancia diaria ($)", minval=0.0, step=50, group=lim_group, tooltip="Si la ganancia del dia alcanza este monto, se detiene el trading. 0 = desactivado.")
+
+// === INPUTS: BACKTEST WINDOW ===
+// Para optimizar/walk-forward exporta la lista de trades (Strategy Tester ->
+// Export) y subela al analizador nq-walkforward (app.py).
+// Parametros optimizables sugeridos y rangos de partida:
+//   swing_length 3..15 | sl_mult 1.0..3.0 | tp_mult 1.5..4.0 |
+//   wall_buffer 5..40 (segun ATR de NQ) | session_spec (RTH vs killzones).
+bt_group   = "Backtest"
+use_dates  = input.bool(false, "Filtrar por rango de fechas", group=bt_group)
+start_date = input.time(timestamp("2024-01-01 00:00"), "Desde", group=bt_group)
+end_date   = input.time(timestamp("2026-12-31 23:59"), "Hasta", group=bt_group)
+
+// === INPUTS: DISPLAY ===
+disp_group  = "Display"
+show_levels = input.bool(true, "Dibujar niveles GEX", group=disp_group)
+show_labels = input.bool(true, "Mostrar etiquetas BOS/CHoCH", group=disp_group)
+show_table  = input.bool(true, "Mostrar panel de estado", group=disp_group)
+
+// === INPUTS: TRADERSPOST (webhook JSON) ===
+// Para automatizar: crea UNA alerta sobre la estrategia, condicion
+// "Order fills only", y en el mensaje pon  {{strategy.order.alert_message}}
+// con la URL webhook de TradersPost. Cada orden enviara su propio JSON.
+tp_group  = "TradersPost (webhook)"
+tp_enable = input.bool(true, "Generar mensajes JSON TradersPost", group=tp_group)
+tp_ticker = input.string("", "Ticker override (vacio = simbolo grafico)", group=tp_group, tooltip="Simbolo que TradersPost mapea a tu broker. Vacio usa syminfo.ticker.")
+tp_qty    = input.int(1, "Cantidad (contratos)", minval=1, group=tp_group)
+
+// === TYPES ===
+type SwingPoint
+    int   bar_index
+    float price
+    bool  is_high
+
+type MarketStructure
+    string trend  // "bullish", "bearish", "sideways"
+    SwingPoint last_high
+    SwingPoint last_low
+    SwingPoint prev_high
+    SwingPoint prev_low
+
+// === STATE ===
+var MarketStructure ms = MarketStructure.new("sideways")
+var label[] sig_labels = array.new<label>()
+
+// === FUNCTIONS ===
+update_structure(structure, new_point) =>
+    if new_point.is_high
+        structure.prev_high := structure.last_high
+        structure.last_high := new_point
+        if not na(structure.prev_high)
+            if new_point.price > structure.prev_high.price
+                structure.trend := "bullish"
+            else if new_point.price < structure.prev_high.price
+                structure.trend := "bearish"
+    else
+        structure.prev_low := structure.last_low
+        structure.last_low := new_point
+        if not na(structure.prev_low)
+            if new_point.price < structure.prev_low.price
+                structure.trend := "bearish"
+            else if new_point.price > structure.prev_low.price
+                structure.trend := "bullish"
+
+create_label(price, txt, col, below) =>
+    if show_labels
+        l = label.new(bar_index, price, text=txt, color=col, textcolor=color.white,
+                 size=size.small, style=below ? label.style_label_up : label.style_label_down)
+        array.push(sig_labels, l)
+        if array.size(sig_labels) > 30
+            label.delete(array.shift(sig_labels))
+
+// === STRUCTURE DETECTION ===
+swing_high = ta.pivothigh(high, swing_length, swing_length)
+swing_low  = ta.pivotlow(low, swing_length, swing_length)
+
+if not na(swing_high)
+    update_structure(ms, SwingPoint.new(bar_index - swing_length, swing_high, true))
+if not na(swing_low)
+    update_structure(ms, SwingPoint.new(bar_index - swing_length, swing_low, false))
+
+has_high = not na(ms.last_high)
+has_low  = not na(ms.last_low)
+
+high_break = has_high and close > ms.last_high.price
+low_break  = has_low  and close < ms.last_low.price
+
+// BOS = ruptura a favor de la tendencia ; CHoCH = ruptura en contra (reversion)
+bos_bull   = high_break and ms.trend == "bullish"
+bos_bear   = low_break  and ms.trend == "bearish"
+choch_bull = high_break and ms.trend == "bearish"
+choch_bear = low_break  and ms.trend == "bullish"
+
+// evita disparar la misma ruptura en cada barra
+new_break_up   = (bos_bull or choch_bull) and not (bos_bull[1] or choch_bull[1])
+new_break_down = (bos_bear or choch_bear) and not (bos_bear[1] or choch_bear[1])
+
+// === REVERSION LEVELS (Manual GEX vs proxy PDH/PDL) ===
+// PDH/PDL = maximo/minimo del dia anterior (proxy backtesteable de las walls).
+// high[1]/low[1] + lookahead_off => sin sesgo de futuro (no repinta).
+use_pdhl = rev_source == "PDH/PDL (backtest)"
+pdh = request.security(syminfo.tickerid, "D", high[1], lookahead=barmerge.lookahead_off)
+pdl = request.security(syminfo.tickerid, "D", low[1],  lookahead=barmerge.lookahead_off)
+eff_call = use_pdhl ? pdh : call_wall          // nivel superior (resistencia)
+eff_put  = use_pdhl ? pdl : put_wall           // nivel inferior (soporte)
+eff_flip = use_pdhl ? (pdh + pdl) / 2 : gamma_flip
+
+// === GEX REGIME ===
+has_flip = use_pdhl ? true : gamma_flip > 0.0
+gex_positive = switch regime_mode
+    "Forzar positivo" => true
+    "Forzar negativo" => false
+    => has_flip ? close > eff_flip : true  // auto; sin flip asume rango
+
+// === GEX PROXIMITY ===
+near_call = eff_call > 0.0 and math.abs(close - eff_call) <= wall_buffer
+near_put  = eff_put  > 0.0 and math.abs(close - eff_put)  <= wall_buffer
+
+// === SIGNAL LOGIC ===
+// Regimen POSITIVO (rango): fade en walls usando reversiones (CHoCH).
+long_reversion  = gex_positive and choch_bull and near_put
+short_reversion = gex_positive and choch_bear and near_call
+
+// Regimen NEGATIVO (tendencia): continuacion con BOS a favor de tendencia.
+long_trend  = not gex_positive and bos_bull and new_break_up
+short_trend = not gex_positive and bos_bear and new_break_down
+
+// === SESSION FILTER (NQ) ===
+in_session  = not na(time(timeframe.period, session_spec, session_tz))
+sess_ok     = not use_session or in_session
+sess_ending = use_session and not in_session and in_session[1]  // RTH -> fuera
+
+// === DAILY LIMITS (prop-firm) ===
+new_day = ta.change(time("D")) != 0
+var int   trades_today   = 0
+var float day_start_eq   = strategy.equity
+if new_day
+    trades_today := 0
+    day_start_eq := strategy.equity
+
+day_pnl       = strategy.equity - day_start_eq
+loss_hit      = use_limits and daily_loss   > 0.0 and day_pnl <= -daily_loss
+target_hit    = use_limits and daily_target > 0.0 and day_pnl >=  daily_target
+trades_capped = use_limits and trades_today >= max_trades
+limits_ok     = not (loss_hit or target_hit or trades_capped)
+
+// === BACKTEST WINDOW ===
+in_window = not use_dates or (time >= start_date and time <= end_date)
+
+can_trade = sess_ok and limits_ok and in_window
+
+// === TREND FILTER ===
+// El filtro EMA se aplica SOLO a los trades de tendencia (BOS). Las
+// reversiones (fade en walls) NO se filtran por EMA, asi en modo Auto cada
+// motor usa su ajuste optimo: reversion sin filtro, tendencia con filtro.
+trend_ema = ta.ema(close, trend_len)
+trend_up  = not use_trend or close > trend_ema
+trend_dn  = not use_trend or close < trend_ema
+
+go_long  = (long_reversion or (long_trend and trend_up)) and can_trade and new_break_up
+go_short = (short_reversion or (short_trend and trend_dn)) and can_trade and new_break_down
+
+// === RISK ===
+atr = ta.atr(atr_len)
+
+// === TRADERSPOST JSON ===
+// Los placeholders {{...}} NO se expanden dentro de alert_message, asi que el
+// JSON se construye con valores reales (str.tostring).
+tp_symbol = tp_ticker == "" ? syminfo.ticker : tp_ticker
+tp_msg(action) =>
+    '{"ticker":"' + tp_symbol + '","action":"' + action + '","quantity":' + str.tostring(tp_qty) + ',"price":' + str.tostring(close) + ',"signal":"Estructura+ GEX"}'
+
+// === SESSION / LIMIT EXITS ===
+// Cierre forzado al terminar la sesion o al tocar el limite de perdida/objetivo.
+if strategy.position_size != 0 and ((flat_on_close and sess_ending) or loss_hit or target_hit)
+    strategy.close_all(comment="Flat (sesion/limite)", alert_message = tp_enable ? tp_msg("exit") : "")
+
+// === EXECUTION ===
+if go_long and strategy.position_size <= 0
+    sl = close - atr * sl_mult
+    tp = use_wall_tp and gex_positive and eff_call > 0.0 ? eff_call : close + atr * tp_mult
+    strategy.entry("Long", strategy.long, alert_message = tp_enable ? tp_msg("buy") : "")
+    strategy.exit("Long TP/SL", "Long", stop=sl, limit=tp, alert_message = tp_enable ? tp_msg("exit") : "")
+    trades_today += 1
+    create_label(low, gex_positive ? "CHoCH+ (rev)" : "BOS+ (tend)", color.new(color.lime, 0), true)
+
+if go_short and strategy.position_size >= 0
+    sl = close + atr * sl_mult
+    tp = use_wall_tp and gex_positive and eff_put > 0.0 ? eff_put : close - atr * tp_mult
+    strategy.entry("Short", strategy.short, alert_message = tp_enable ? tp_msg("sell") : "")
+    strategy.exit("Short TP/SL", "Short", stop=sl, limit=tp, alert_message = tp_enable ? tp_msg("exit") : "")
+    trades_today += 1
+    create_label(high, gex_positive ? "CHoCH- (rev)" : "BOS- (tend)", color.new(color.red, 0), false)
+
+// === DRAW GEX LEVELS ===
+plot(show_levels and eff_call > 0.0 ? eff_call : na, "Resistencia (Call/PDH)", color.new(color.red, 0),    2, plot.style_linebr)
+plot(show_levels and eff_put  > 0.0 ? eff_put  : na, "Soporte (Put/PDL)",      color.new(color.green, 0),   2, plot.style_linebr)
+plot(show_levels and eff_flip > 0.0 ? eff_flip : na, "Flip / Mid",             color.new(color.orange, 0),  2, plot.style_linebr)
+plot(use_trend ? trend_ema : na, "EMA tendencia", color.new(color.purple, 0), 1)
+
+// Tinte de fondo cuando estamos fuera de la sesion permitida.
+bgcolor(use_session and not in_session ? color.new(color.gray, 90) : na, title="Fuera de sesion")
+
+// === STATUS PANEL ===
+// La doc v6 exige declarar la tabla con `var` en scope global y poblar las
+// celdas dentro de `if barstate.islast`.
+status_txt = not limits_ok ? (loss_hit ? "STOP perdida" : target_hit ? "STOP objetivo" : "STOP max trades") : not sess_ok ? "Fuera sesion" : "Operando"
+status_col = can_trade ? color.lime : color.red
+var table t = table.new(position.top_right, 2, 8, border_width=1)
+if show_table and barstate.islast
+    table.cell(t, 0, 0, "Estructura+ GEX", text_color=color.white, bgcolor=color.new(color.blue, 0))
+    table.cell(t, 1, 0, "",                text_color=color.white, bgcolor=color.new(color.blue, 0))
+    table.cell(t, 0, 1, "Tendencia",  text_color=color.white)
+    table.cell(t, 1, 1, ms.trend,     text_color=ms.trend == "bullish" ? color.lime : ms.trend == "bearish" ? color.red : color.gray)
+    table.cell(t, 0, 2, "Regimen GEX", text_color=color.white)
+    table.cell(t, 1, 2, gex_positive ? "Positivo (rango)" : "Negativo (tendencia)", text_color=gex_positive ? color.aqua : color.orange)
+    table.cell(t, 0, 3, "Cerca Call", text_color=color.white)
+    table.cell(t, 1, 3, near_call ? "SI" : "no", text_color=near_call ? color.red : color.gray)
+    table.cell(t, 0, 4, "Cerca Put",  text_color=color.white)
+    table.cell(t, 1, 4, near_put ? "SI" : "no",  text_color=near_put ? color.green : color.gray)
+    table.cell(t, 0, 5, "Trades hoy", text_color=color.white)
+    table.cell(t, 1, 5, str.tostring(trades_today) + " / " + str.tostring(max_trades), text_color=trades_capped ? color.red : color.white)
+    table.cell(t, 0, 6, "P&L dia",    text_color=color.white)
+    table.cell(t, 1, 6, str.tostring(day_pnl, "#.##") + " $", text_color=day_pnl >= 0 ? color.lime : color.red)
+    table.cell(t, 0, 7, "Estado",     text_color=color.white)
+    table.cell(t, 1, 7, status_txt,   text_color=status_col)
+
+// === ALERTS ===
+alertcondition(go_long,  "EST+GEX Long",  "Estructura+ GEX: senal LONG")
+alertcondition(go_short, "EST+GEX Short", "Estructura+ GEX: senal SHORT")
