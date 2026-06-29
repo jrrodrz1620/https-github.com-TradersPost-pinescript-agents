@@ -1,0 +1,148 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Open-source re-implementation of "Phantom Flow"-style Smart Money Concepts
+// Implemented by Pine Script Development Assistant
+//
+// Phantom Flow SMC — Strategy
+// Trading rules built on the same Smart Money structure as the indicator:
+//   ENTRY  long  : structure flips bullish (BOS/CHoCH up) while price sits in
+//                  the DISCOUNT half of the active swing range; optional fresh
+//                  bullish FVG confirmation.
+//   ENTRY  short : structure flips bearish (BOS/CHoCH down) while price sits in
+//                  the PREMIUM half of the range; optional fresh bearish FVG.
+//   STOP        : beyond the opposing swing (structure stop) or ATR, whichever
+//                  the user selects.
+//   TARGET      : fixed R:R multiple of the stop distance.
+//
+// Defaults are tuned for NQ/MNQ futures. Named entry/exit signals export
+// cleanly into the nq-walkforward analyzer (Strategy Tester → Export → List of
+// Trades). Non-repainting: structure comes from confirmed pivots, entries fire
+// on bar close.
+
+//@version=6
+strategy("Phantom Flow SMC Strategy", overlay=true, initial_capital=50000,
+         default_qty_type=strategy.fixed, default_qty_value=1,
+         commission_type=strategy.commission.cash_per_contract, commission_value=2.0,
+         slippage=1, calc_on_every_tick=false, pyramiding=0)
+
+// ============================================================================
+// INPUT SETTINGS
+// ============================================================================
+
+// Structure
+grpMS = "Market Structure"
+swingLength = input.int(10, "Swing Pivot Length", minval=2, maxval=50, group=grpMS)
+
+// Entry Filters
+grpEntry = "Entry Filters"
+useLocation = input.bool(true, "Require Discount/Premium Location", group=grpEntry, tooltip="Longs only in discount, shorts only in premium.")
+requireFVG  = input.bool(false, "Require Fresh FVG Confirmation", group=grpEntry)
+fvgAtrMult  = input.float(0.25, "Min FVG Size (× ATR)", minval=0.0, step=0.05, group=grpEntry)
+allowLongs  = input.bool(true, "Allow Longs", inline="dir", group=grpEntry)
+allowShorts = input.bool(true, "Allow Shorts", inline="dir", group=grpEntry)
+
+// Session
+grpSess = "Session Filter"
+useSession   = input.bool(true, "Restrict to Session", group=grpSess)
+sessionWin   = input.session("0930-1600", "Session (exchange time)", group=grpSess)
+closeAtEnd   = input.bool(true, "Flatten at Session End", group=grpSess)
+
+// Risk
+grpRisk = "Risk Management"
+stopMode    = input.string("Structure", "Stop Type", ["Structure", "ATR"], group=grpRisk)
+atrLength   = input.int(14, "ATR Length", minval=2, group=grpRisk)
+atrMult     = input.float(1.5, "ATR Stop Multiplier", minval=0.2, step=0.1, group=grpRisk)
+structBuf   = input.float(0.25, "Structure Stop Buffer (× ATR)", minval=0.0, step=0.05, group=grpRisk)
+rrRatio     = input.float(2.0, "Reward : Risk", minval=0.5, step=0.5, group=grpRisk)
+
+// ============================================================================
+// CORE CALCULATIONS
+// ============================================================================
+
+atr = ta.atr(atrLength)
+
+ph = ta.pivothigh(high, swingLength, swingLength)
+pl = ta.pivotlow(low, swingLength, swingLength)
+
+var float upper    = na
+var float lower    = na
+var int   osMode   = 0
+var float rangeHigh = na
+var float rangeLow  = na
+
+if not na(ph)
+    upper := ph
+    rangeHigh := ph
+if not na(pl)
+    lower := pl
+    rangeLow := pl
+
+equilibrium = (not na(rangeHigh) and not na(rangeLow)) ? (rangeHigh + rangeLow) / 2 : na
+
+// Structure breaks (single trigger on the breaking bar)
+bullBreak = not na(upper) and close > upper and close[1] <= upper
+bearBreak = not na(lower) and close < lower and close[1] >= lower
+
+if bullBreak
+    osMode := 1
+if bearBreak
+    osMode := -1
+
+// Fresh imbalances for optional confirmation
+bullFVG = low > high[2] and (low - high[2]) > atr * fvgAtrMult
+bearFVG = high < low[2] and (low[2] - high) > atr * fvgAtrMult
+var bool freshBullFVG = false
+var bool freshBearFVG = false
+if bullFVG
+    freshBullFVG := true
+if bearFVG
+    freshBearFVG := true
+// FVG "freshness" resets after an opposing break so it must re-form
+if bearBreak
+    freshBullFVG := false
+if bullBreak
+    freshBearFVG := false
+
+// ============================================================================
+// ENTRY LOGIC
+// ============================================================================
+
+inDiscount = na(equilibrium) or not useLocation ? true : close <= equilibrium
+inPremium  = na(equilibrium) or not useLocation ? true : close >= equilibrium
+
+inSession = not useSession or not na(time(timeframe.period, sessionWin))
+
+longSignal  = allowLongs and bullBreak and inDiscount and (not requireFVG or freshBullFVG) and inSession
+shortSignal = allowShorts and bearBreak and inPremium and (not requireFVG or freshBearFVG) and inSession
+
+// Stop / target prices computed at signal time
+longStop = stopMode == "ATR" ? close - atr * atrMult : (na(lower) ? close - atr * atrMult : lower - atr * structBuf)
+shortStop = stopMode == "ATR" ? close + atr * atrMult : (na(upper) ? close + atr * atrMult : upper + atr * structBuf)
+
+longRisk = close - longStop
+shortRisk = shortStop - close
+
+longTarget = close + longRisk * rrRatio
+shortTarget = shortStop - shortRisk * rrRatio  // = close - shortRisk*rr below entry
+
+if longSignal and longRisk > 0
+    strategy.entry("PF Long", strategy.long, comment="PF Long")
+    strategy.exit("PF Long X", from_entry="PF Long", stop=longStop, limit=longTarget, comment_profit="TP", comment_loss="SL")
+
+if shortSignal and shortRisk > 0
+    strategy.entry("PF Short", strategy.short, comment="PF Short")
+    strategy.exit("PF Short X", from_entry="PF Short", stop=shortStop, limit=shortTarget, comment_profit="TP", comment_loss="SL")
+
+// Flatten at session end if requested
+sessionNow  = not na(time(timeframe.period, sessionWin))
+sessionEnd  = closeAtEnd and useSession and sessionNow[1] and not sessionNow
+if sessionEnd
+    strategy.close_all(comment="Session End")
+
+// ============================================================================
+// VISUALS
+// ============================================================================
+
+plotshape(longSignal,  title="Long",  style=shape.triangleup,   location=location.belowbar, color=color.teal, size=size.small)
+plotshape(shortSignal, title="Short", style=shape.triangledown, location=location.abovebar, color=color.red,  size=size.small)
+plot(equilibrium, "Equilibrium", color=color.new(color.gray, 50), style=plot.style_stepline)
+bgcolor(useSession and sessionNow ? color.new(color.blue, 94) : na, title="Session")

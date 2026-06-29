@@ -1,0 +1,273 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Open-source re-implementation of "Phantom Flow"-style Smart Money Concepts
+// Implemented by Pine Script Development Assistant
+//
+// Phantom Flow SMC (Open) — combines the core building blocks marketed by the
+// commercial "Phantom Flow" indicator into a single, readable overlay:
+//   • Market structure       — BOS (Break of Structure) & CHoCH (Change of Character)
+//   • Order blocks           — last opposing candle before a structure break
+//   • Fair Value Gaps (FVG)  — 3-candle imbalances, optional mitigation
+//   • Liquidity pools        — equal highs/lows + sweep detection
+//   • Premium / discount      — equilibrium of the active swing range
+//   • Bias dashboard         — trend + price location at a glance
+//
+// Repainting note: all structure is derived from CONFIRMED swing pivots
+// (ta.pivothigh / ta.pivotlow), which finalize `swingLength` bars after the
+// fact and never repaint once printed. Breaks are evaluated on bar close.
+
+//@version=6
+indicator("Phantom Flow SMC (Open)", overlay=true, max_boxes_count=500, max_lines_count=500, max_labels_count=500)
+
+// ============================================================================
+// INPUT SETTINGS
+// ============================================================================
+
+// Market Structure
+grpMS = "Market Structure"
+swingLength   = input.int(10, "Swing Pivot Length", minval=2, maxval=50, group=grpMS, tooltip="Bars on each side of a pivot. Higher = fewer, more significant swings.")
+showStructure = input.bool(true, "Show BOS / CHoCH", group=grpMS)
+bosColor      = input.color(color.gray, "BOS Color", inline="ms", group=grpMS)
+chochColor    = input.color(color.orange, "CHoCH Color", inline="ms", group=grpMS)
+
+// Order Blocks
+grpOB = "Order Blocks"
+showOB        = input.bool(true, "Show Order Blocks", group=grpOB)
+obLookback    = input.int(20, "OB Search Window (bars)", minval=3, maxval=100, group=grpOB, tooltip="How far back to look for the last opposing candle before a break.")
+maxOB         = input.int(8, "Max Order Blocks", minval=1, maxval=30, group=grpOB)
+obBullColor   = input.color(color.new(color.teal, 80), "Bullish OB", inline="ob", group=grpOB)
+obBearColor   = input.color(color.new(color.red, 80), "Bearish OB", inline="ob", group=grpOB)
+
+// Fair Value Gaps
+grpFVG = "Fair Value Gaps"
+showFVG       = input.bool(true, "Show FVG", group=grpFVG)
+fvgAtrMult    = input.float(0.25, "Min FVG Size (× ATR)", minval=0.0, step=0.05, group=grpFVG, tooltip="Filters out tiny gaps. 0 = show all 3-candle imbalances.")
+mitigateFVG   = input.bool(true, "Remove FVG on Fill", group=grpFVG)
+maxFVG        = input.int(10, "Max FVG", minval=1, maxval=40, group=grpFVG)
+fvgBullColor  = input.color(color.new(color.green, 82), "Bullish FVG", inline="fvg", group=grpFVG)
+fvgBearColor  = input.color(color.new(color.maroon, 82), "Bearish FVG", inline="fvg", group=grpFVG)
+
+// Liquidity
+grpLiq = "Liquidity"
+showLiq       = input.bool(true, "Show Equal Highs/Lows", group=grpLiq)
+liqAtrMult    = input.float(0.1, "Equal-Level Tolerance (× ATR)", minval=0.0, step=0.05, group=grpLiq)
+liqColor      = input.color(color.new(color.blue, 0), "Liquidity Color", group=grpLiq)
+
+// Premium / Discount
+grpPD = "Premium / Discount"
+showPD        = input.bool(true, "Show Premium/Discount Zones", group=grpPD)
+premColor     = input.color(color.new(color.red, 88), "Premium", inline="pd", group=grpPD)
+discColor     = input.color(color.new(color.green, 88), "Discount", inline="pd", group=grpPD)
+
+// Dashboard
+grpDash = "Dashboard"
+showDash      = input.bool(true, "Show Bias Dashboard", group=grpDash)
+dashPos       = input.string("Top Right", "Position", ["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=grpDash)
+
+// ============================================================================
+// CORE CALCULATIONS
+// ============================================================================
+
+atr = ta.atr(14)
+
+// Confirmed swing pivots (finalize swingLength bars back — non-repainting)
+ph = ta.pivothigh(high, swingLength, swingLength)
+pl = ta.pivotlow(low, swingLength, swingLength)
+
+// Active structure levels and the bar they were set on
+var float upper    = na
+var int   upperBar = na
+var float lower    = na
+var int   lowerBar = na
+var int   osMode   = 0   // 1 = bullish structure, -1 = bearish structure
+
+if not na(ph)
+    upper    := ph
+    upperBar := bar_index - swingLength
+if not na(pl)
+    lower    := pl
+    lowerBar := bar_index - swingLength
+
+// Track the most recent swing range for premium/discount and equilibrium
+var float rangeHigh = na
+var float rangeLow  = na
+if not na(ph)
+    rangeHigh := ph
+if not na(pl)
+    rangeLow := pl
+equilibrium = (not na(rangeHigh) and not na(rangeLow)) ? (rangeHigh + rangeLow) / 2 : na
+
+// ============================================================================
+// MARKET STRUCTURE — BOS / CHoCH
+// ============================================================================
+
+// A break triggers once, on the bar that first closes beyond the active level.
+bullBreak = showStructure and not na(upper) and close > upper and close[1] <= upper
+bearBreak = showStructure and not na(lower) and close < lower and close[1] >= lower
+
+var string lastEvent = "—"
+
+f_drawBreak(float level, int fromBar, bool isChoch, bool isBull) =>
+    col = isChoch ? chochColor : bosColor
+    line.new(fromBar, level, bar_index, level, color=col, style=line.style_dashed, width=1)
+    txt = isChoch ? "CHoCH" : "BOS"
+    label.new(bar_index, level, txt, style=isBull ? label.style_label_down : label.style_label_up, color=col, textcolor=color.white, size=size.small)
+
+if bullBreak
+    isChoch = osMode == -1
+    f_drawBreak(upper, na(upperBar) ? bar_index : upperBar, isChoch, true)
+    lastEvent := (isChoch ? "CHoCH ▲" : "BOS ▲")
+    osMode := 1
+
+if bearBreak
+    isChoch = osMode == 1
+    f_drawBreak(lower, na(lowerBar) ? bar_index : lowerBar, isChoch, false)
+    lastEvent := (isChoch ? "CHoCH ▼" : "BOS ▼")
+    osMode := -1
+
+// ============================================================================
+// ORDER BLOCKS — last opposing candle before the break
+// ============================================================================
+
+var box[] obBoxes = array.new<box>()
+
+f_addOB(bool bullish) =>
+    int idx = na
+    for i = 1 to obLookback
+        if bullish and close[i] < open[i]
+            idx := i
+            break
+        if not bullish and close[i] > open[i]
+            idx := i
+            break
+    if not na(idx)
+        col = bullish ? obBullColor : obBearColor
+        b = box.new(bar_index - idx, high[idx], bar_index + 5, low[idx], bgcolor=col, border_color=color.new(col, 40), extend=extend.none)
+        array.push(obBoxes, b)
+        if array.size(obBoxes) > maxOB
+            box.delete(array.shift(obBoxes))
+
+if showOB and bullBreak
+    f_addOB(true)
+if showOB and bearBreak
+    f_addOB(false)
+
+// Keep order blocks anchored to the current bar so they read as live zones
+if showOB and barstate.islast
+    for i = 0 to array.size(obBoxes) - 1
+        box.set_right(array.get(obBoxes, i), bar_index + 5)
+
+// ============================================================================
+// FAIR VALUE GAPS — 3-candle imbalance
+// ============================================================================
+
+var box[] fvgBoxes = array.new<box>()
+
+bullFVG = showFVG and low > high[2] and (low - high[2]) > atr * fvgAtrMult
+bearFVG = showFVG and high < low[2] and (low[2] - high) > atr * fvgAtrMult
+
+if bullFVG
+    b = box.new(bar_index - 2, low, bar_index + 8, high[2], bgcolor=fvgBullColor, border_color=color.new(fvgBullColor, 30))
+    array.push(fvgBoxes, b)
+    if array.size(fvgBoxes) > maxFVG
+        box.delete(array.shift(fvgBoxes))
+
+if bearFVG
+    b = box.new(bar_index - 2, low[2], bar_index + 8, high, bgcolor=fvgBearColor, border_color=color.new(fvgBearColor, 30))
+    array.push(fvgBoxes, b)
+    if array.size(fvgBoxes) > maxFVG
+        box.delete(array.shift(fvgBoxes))
+
+// Mitigate (delete) an FVG once price trades fully back through it
+if mitigateFVG and array.size(fvgBoxes) > 0
+    int j = array.size(fvgBoxes) - 1
+    while j >= 0
+        bx = array.get(fvgBoxes, j)
+        top = box.get_top(bx)
+        bot = box.get_bottom(bx)
+        filled = low <= bot and high >= top
+        if filled
+            box.delete(bx)
+            array.remove(fvgBoxes, j)
+        else if barstate.islast
+            box.set_right(bx, bar_index + 8)
+        j -= 1
+
+// ============================================================================
+// LIQUIDITY — equal highs / lows
+// ============================================================================
+
+var float prevPH = na
+var float prevPL = na
+
+if showLiq and not na(ph)
+    if not na(prevPH) and math.abs(ph - prevPH) <= atr * liqAtrMult
+        line.new(bar_index - swingLength, ph, bar_index, ph, color=liqColor, style=line.style_dotted, width=1)
+        label.new(bar_index, ph, "EQH", style=label.style_label_down, color=color.new(liqColor, 70), textcolor=color.white, size=size.tiny)
+    prevPH := ph
+
+if showLiq and not na(pl)
+    if not na(prevPL) and math.abs(pl - prevPL) <= atr * liqAtrMult
+        line.new(bar_index - swingLength, pl, bar_index, pl, color=liqColor, style=line.style_dotted, width=1)
+        label.new(bar_index, pl, "EQL", style=label.style_label_up, color=color.new(liqColor, 70), textcolor=color.white, size=size.tiny)
+    prevPL := pl
+
+// Sweep: wick takes out the level but body closes back inside
+sweepHigh = showLiq and not na(upper) and high > upper and close < upper
+sweepLow  = showLiq and not na(lower) and low < lower and close > lower
+plotshape(sweepHigh, title="Sweep High", style=shape.triangledown, location=location.abovebar, color=color.fuchsia, size=size.tiny)
+plotshape(sweepLow,  title="Sweep Low",  style=shape.triangleup,   location=location.belowbar, color=color.aqua,    size=size.tiny)
+
+// ============================================================================
+// PREMIUM / DISCOUNT ZONES
+// ============================================================================
+
+var box premBox = na
+var box discBox = na
+var line eqLine = na
+
+if showPD and not na(rangeHigh) and not na(rangeLow) and barstate.islast
+    box.delete(premBox)
+    box.delete(discBox)
+    line.delete(eqLine)
+    leftBar = bar_index - 60
+    premBox := box.new(leftBar, rangeHigh, bar_index + 5, equilibrium, bgcolor=premColor, border_color=na)
+    discBox := box.new(leftBar, equilibrium, bar_index + 5, rangeLow, bgcolor=discColor, border_color=na)
+    eqLine  := line.new(leftBar, equilibrium, bar_index + 5, equilibrium, color=color.gray, style=line.style_dashed)
+
+// ============================================================================
+// BIAS DASHBOARD
+// ============================================================================
+
+f_pos() =>
+    switch dashPos
+        "Top Right"    => position.top_right
+        "Top Left"     => position.top_left
+        "Bottom Right" => position.bottom_right
+        => position.bottom_left
+
+var table dash = na
+if showDash
+    if na(dash)
+        dash := table.new(f_pos(), 2, 4, border_width=1)
+    if barstate.islast
+        trendTxt = osMode == 1 ? "Bullish ▲" : osMode == -1 ? "Bearish ▼" : "Neutral"
+        trendCol = osMode == 1 ? color.green : osMode == -1 ? color.red : color.gray
+        locTxt = na(equilibrium) ? "—" : close > equilibrium ? "Premium" : "Discount"
+        locCol = na(equilibrium) ? color.gray : close > equilibrium ? color.red : color.green
+        table.cell(dash, 0, 0, "Phantom Flow SMC", text_color=color.white, bgcolor=color.new(color.blue, 30), text_size=size.small)
+        table.cell(dash, 1, 0, "", bgcolor=color.new(color.blue, 30))
+        table.cell(dash, 0, 1, "Trend", text_color=color.white, text_size=size.small)
+        table.cell(dash, 1, 1, trendTxt, text_color=color.white, bgcolor=color.new(trendCol, 60), text_size=size.small)
+        table.cell(dash, 0, 2, "Last Event", text_color=color.white, text_size=size.small)
+        table.cell(dash, 1, 2, lastEvent, text_color=color.white, text_size=size.small)
+        table.cell(dash, 0, 3, "Location", text_color=color.white, text_size=size.small)
+        table.cell(dash, 1, 3, locTxt, text_color=color.white, bgcolor=color.new(locCol, 60), text_size=size.small)
+
+// ============================================================================
+// ALERTS
+// ============================================================================
+
+alertcondition(bullBreak, "Bullish Structure Break", "Phantom Flow: bullish BOS/CHoCH")
+alertcondition(bearBreak, "Bearish Structure Break", "Phantom Flow: bearish BOS/CHoCH")
+alertcondition(sweepHigh, "Liquidity Sweep High", "Phantom Flow: high swept")
+alertcondition(sweepLow,  "Liquidity Sweep Low",  "Phantom Flow: low swept")
