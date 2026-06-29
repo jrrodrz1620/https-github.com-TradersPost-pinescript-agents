@@ -6,21 +6,21 @@
 // Trading rules built on the same Smart Money structure as the indicator:
 //   ENTRY  long  : structure flips bullish (BOS/CHoCH up) while price sits in
 //                  the DISCOUNT half of the active swing range; optional fresh
-//                  bullish FVG confirmation.
-//   ENTRY  short : structure flips bearish (BOS/CHoCH down) while price sits in
-//                  the PREMIUM half of the range; optional fresh bearish FVG.
-//   STOP        : beyond the opposing swing (structure stop) or ATR, whichever
-//                  the user selects.
-//   TARGET      : fixed R:R multiple of the stop distance.
+//                  bullish FVG + higher-timeframe trend confirmation.
+//   ENTRY  short : mirror — bearish flip in the PREMIUM half.
+//   STOP        : beyond the opposing swing (structure stop) or ATR.
+//   MANAGEMENT  : optional partial take-profit at 1R, breakeven move, and an
+//                  ATR trailing stop on the runner.
+//   TARGET      : fixed R:R multiple of the initial stop distance.
 //
 // Defaults are tuned for NQ/MNQ futures. Named entry/exit signals export
 // cleanly into the nq-walkforward analyzer (Strategy Tester → Export → List of
-// Trades). Non-repainting: structure comes from confirmed pivots, entries fire
-// on bar close.
+// Trades). Non-repainting: structure comes from confirmed pivots, HTF data is
+// pulled with lookahead off on the prior bar, entries fire on bar close.
 
 //@version=6
 strategy("Phantom Flow SMC Strategy", overlay=true, initial_capital=50000,
-         default_qty_type=strategy.fixed, default_qty_value=1,
+         default_qty_type=strategy.fixed, default_qty_value=2,
          commission_type=strategy.commission.cash_per_contract, commission_value=2.0,
          slippage=1, calc_on_every_tick=false, pyramiding=0)
 
@@ -31,6 +31,12 @@ strategy("Phantom Flow SMC Strategy", overlay=true, initial_capital=50000,
 // Structure
 grpMS = "Market Structure"
 swingLength = input.int(10, "Swing Pivot Length", minval=2, maxval=50, group=grpMS)
+
+// Higher-Timeframe Trend Filter
+grpHTF = "HTF Trend Filter"
+useHTF      = input.bool(true, "Require HTF Trend Agreement", group=grpHTF, tooltip="Longs only when HTF close is above its EMA; shorts only when below.")
+htfTf       = input.timeframe("60", "HTF Timeframe", group=grpHTF)
+htfEmaLen   = input.int(50, "HTF EMA Length", minval=5, group=grpHTF)
 
 // Entry Filters
 grpEntry = "Entry Filters"
@@ -46,13 +52,19 @@ useSession   = input.bool(true, "Restrict to Session", group=grpSess)
 sessionWin   = input.session("0930-1600", "Session (exchange time)", group=grpSess)
 closeAtEnd   = input.bool(true, "Flatten at Session End", group=grpSess)
 
-// Risk
-grpRisk = "Risk Management"
+// Risk & Trade Management
+grpRisk = "Risk & Management"
 stopMode    = input.string("Structure", "Stop Type", ["Structure", "ATR"], group=grpRisk)
 atrLength   = input.int(14, "ATR Length", minval=2, group=grpRisk)
 atrMult     = input.float(1.5, "ATR Stop Multiplier", minval=0.2, step=0.1, group=grpRisk)
 structBuf   = input.float(0.25, "Structure Stop Buffer (× ATR)", minval=0.0, step=0.05, group=grpRisk)
-rrRatio     = input.float(2.0, "Reward : Risk", minval=0.5, step=0.5, group=grpRisk)
+rrRatio     = input.float(2.0, "Final Reward : Risk", minval=0.5, step=0.5, group=grpRisk)
+usePartial  = input.bool(true, "Take Partial at 1R", group=grpRisk, tooltip="Scale out half the position at +1R.")
+partialPct  = input.float(50, "Partial Size (%)", minval=10, maxval=90, step=5, group=grpRisk)
+useBE       = input.bool(true, "Move Stop to Breakeven", group=grpRisk)
+beTrigger   = input.float(1.0, "Breakeven Trigger (R)", minval=0.2, step=0.1, group=grpRisk)
+useTrail    = input.bool(false, "ATR Trailing Stop", group=grpRisk)
+trailMult   = input.float(2.0, "Trail Distance (× ATR)", minval=0.5, step=0.1, group=grpRisk)
 
 // ============================================================================
 // CORE CALCULATIONS
@@ -63,9 +75,9 @@ atr = ta.atr(atrLength)
 ph = ta.pivothigh(high, swingLength, swingLength)
 pl = ta.pivotlow(low, swingLength, swingLength)
 
-var float upper    = na
-var float lower    = na
-var int   osMode   = 0
+var float upper     = na
+var float lower     = na
+var int   osMode    = 0
 var float rangeHigh = na
 var float rangeLow  = na
 
@@ -87,6 +99,12 @@ if bullBreak
 if bearBreak
     osMode := -1
 
+// Higher-timeframe trend (prior HTF bar + lookahead off = non-repainting)
+htfClose = request.security(syminfo.tickerid, htfTf, close[1], lookahead=barmerge.lookahead_off)
+htfEma   = request.security(syminfo.tickerid, htfTf, ta.ema(close, htfEmaLen)[1], lookahead=barmerge.lookahead_off)
+htfBull  = htfClose > htfEma
+htfBear  = htfClose < htfEma
+
 // Fresh imbalances for optional confirmation
 bullFVG = low > high[2] and (low - high[2]) > atr * fvgAtrMult
 bearFVG = high < low[2] and (low[2] - high) > atr * fvgAtrMult
@@ -96,7 +114,6 @@ if bullFVG
     freshBullFVG := true
 if bearFVG
     freshBearFVG := true
-// FVG "freshness" resets after an opposing break so it must re-form
 if bearBreak
     freshBullFVG := false
 if bullBreak
@@ -108,33 +125,71 @@ if bullBreak
 
 inDiscount = na(equilibrium) or not useLocation ? true : close <= equilibrium
 inPremium  = na(equilibrium) or not useLocation ? true : close >= equilibrium
+inSession  = not useSession or not na(time(timeframe.period, sessionWin))
 
-inSession = not useSession or not na(time(timeframe.period, sessionWin))
+longSignal  = allowLongs and bullBreak and inDiscount and (not requireFVG or freshBullFVG) and (not useHTF or htfBull) and inSession
+shortSignal = allowShorts and bearBreak and inPremium and (not requireFVG or freshBearFVG) and (not useHTF or htfBear) and inSession
 
-longSignal  = allowLongs and bullBreak and inDiscount and (not requireFVG or freshBullFVG) and inSession
-shortSignal = allowShorts and bearBreak and inPremium and (not requireFVG or freshBearFVG) and inSession
-
-// Stop / target prices computed at signal time
-longStop = stopMode == "ATR" ? close - atr * atrMult : (na(lower) ? close - atr * atrMult : lower - atr * structBuf)
+// Initial stop prices computed at signal time
+longStop  = stopMode == "ATR" ? close - atr * atrMult : (na(lower) ? close - atr * atrMult : lower - atr * structBuf)
 shortStop = stopMode == "ATR" ? close + atr * atrMult : (na(upper) ? close + atr * atrMult : upper + atr * structBuf)
-
-longRisk = close - longStop
+longRisk  = close - longStop
 shortRisk = shortStop - close
 
-longTarget = close + longRisk * rrRatio
-shortTarget = shortStop - shortRisk * rrRatio  // = close - shortRisk*rr below entry
+// ============================================================================
+// TRADE STATE  (entry price, initial risk, working stop)
+// ============================================================================
 
-if longSignal and longRisk > 0
+var float entryPx  = na
+var float initRisk = na
+var float workStop = na
+
+// ── Entries (flat only; pyramiding disabled) ──
+if longSignal and longRisk > 0 and strategy.position_size == 0
     strategy.entry("PF Long", strategy.long, comment="PF Long")
-    strategy.exit("PF Long X", from_entry="PF Long", stop=longStop, limit=longTarget, comment_profit="TP", comment_loss="SL")
+    entryPx  := close
+    initRisk := longRisk
+    workStop := longStop
 
-if shortSignal and shortRisk > 0
+if shortSignal and shortRisk > 0 and strategy.position_size == 0
     strategy.entry("PF Short", strategy.short, comment="PF Short")
-    strategy.exit("PF Short X", from_entry="PF Short", stop=shortStop, limit=shortTarget, comment_profit="TP", comment_loss="SL")
+    entryPx  := close
+    initRisk := shortRisk
+    workStop := shortStop
+
+// ── Manage open long ──
+if strategy.position_size > 0 and not na(entryPx)
+    if useBE and high >= entryPx + initRisk * beTrigger
+        workStop := math.max(workStop, entryPx)
+    if useTrail
+        workStop := math.max(workStop, close - atr * trailMult)
+    tp1   = entryPx + initRisk
+    tpFin = entryPx + initRisk * rrRatio
+    if usePartial
+        strategy.exit("L-TP1", from_entry="PF Long", qty_percent=partialPct, limit=tp1, stop=workStop, comment_profit="TP1", comment_loss="SL")
+    strategy.exit("L-Exit", from_entry="PF Long", limit=tpFin, stop=workStop, comment_profit="TP", comment_loss="SL")
+
+// ── Manage open short ──
+if strategy.position_size < 0 and not na(entryPx)
+    if useBE and low <= entryPx - initRisk * beTrigger
+        workStop := math.min(workStop, entryPx)
+    if useTrail
+        workStop := math.min(workStop, close + atr * trailMult)
+    tp1   = entryPx - initRisk
+    tpFin = entryPx - initRisk * rrRatio
+    if usePartial
+        strategy.exit("S-TP1", from_entry="PF Short", qty_percent=partialPct, limit=tp1, stop=workStop, comment_profit="TP1", comment_loss="SL")
+    strategy.exit("S-Exit", from_entry="PF Short", limit=tpFin, stop=workStop, comment_profit="TP", comment_loss="SL")
+
+// ── Reset state when flat ──
+if strategy.position_size == 0
+    entryPx  := na
+    initRisk := na
+    workStop := na
 
 // Flatten at session end if requested
-sessionNow  = not na(time(timeframe.period, sessionWin))
-sessionEnd  = closeAtEnd and useSession and sessionNow[1] and not sessionNow
+sessionNow = not na(time(timeframe.period, sessionWin))
+sessionEnd = closeAtEnd and useSession and sessionNow[1] and not sessionNow
 if sessionEnd
     strategy.close_all(comment="Session End")
 
@@ -145,4 +200,5 @@ if sessionEnd
 plotshape(longSignal,  title="Long",  style=shape.triangleup,   location=location.belowbar, color=color.teal, size=size.small)
 plotshape(shortSignal, title="Short", style=shape.triangledown, location=location.abovebar, color=color.red,  size=size.small)
 plot(equilibrium, "Equilibrium", color=color.new(color.gray, 50), style=plot.style_stepline)
+plot(strategy.position_size != 0 ? workStop : na, "Working Stop", color=color.new(color.red, 0), style=plot.style_linebr)
 bgcolor(useSession and sessionNow ? color.new(color.blue, 94) : na, title="Session")

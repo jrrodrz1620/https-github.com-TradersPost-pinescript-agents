@@ -27,6 +27,24 @@ for out-of-sample validation.
 - **Premium / Discount** — equilibrium of the active swing range; longs favored in
   discount, shorts in premium.
 
+### Advanced SMC layer (indicator)
+
+- **HTF trend bias** — higher-timeframe EMA bias (non-repainting `request.security`
+  on the prior bar), shown in the dashboard and plotted faintly.
+- **Displacement candles** — impulse bars whose body exceeds an ATR multiple,
+  highlighting institutional intent (and higher-quality FVGs).
+- **Breaker blocks** — an order block that price breaks through flips polarity and
+  is redrawn as support/resistance in the new direction.
+- **Inducement (IDM)** — liquidity grabs against the broken side but in line with
+  the prevailing trend (stops taken before continuation).
+
+### Strategy trade management
+
+- **HTF trend filter** — longs only when HTF is bullish, shorts only when bearish.
+- **Partial take-profit** — scale out a configurable % at +1R.
+- **Breakeven move** — pull the stop to entry once price reaches the R trigger.
+- **ATR trailing stop** — optional trail on the runner after the partial.
+
 ### Repainting
 
 All structure is built from `ta.pivothigh` / `ta.pivotlow`, which finalize
