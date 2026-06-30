@@ -94,10 +94,20 @@ equilibrium = (not na(rangeHigh) and not na(rangeLow)) ? (rangeHigh + rangeLow) 
 bullBreak = not na(upper) and close > upper and close[1] <= upper
 bearBreak = not na(lower) and close < lower and close[1] >= lower
 
+// A structure shift ARMS a side; the actual entry waits for a pullback into the
+// favorable half of the range (a bullish break closes near the highs = premium,
+// so requiring discount AT the break bar would almost never fire — we enter the
+// retracement instead).
+var bool armedLong  = false
+var bool armedShort = false
 if bullBreak
     osMode := 1
+    armedLong  := true
+    armedShort := false
 if bearBreak
     osMode := -1
+    armedShort := true
+    armedLong  := false
 
 // Higher-timeframe trend (prior HTF bar + lookahead off = non-repainting)
 htfClose = request.security(syminfo.tickerid, htfTf, close[1], lookahead=barmerge.lookahead_off)
@@ -127,8 +137,9 @@ inDiscount = na(equilibrium) or not useLocation ? true : close <= equilibrium
 inPremium  = na(equilibrium) or not useLocation ? true : close >= equilibrium
 inSession  = not useSession or not na(time(timeframe.period, sessionWin))
 
-longSignal  = allowLongs and bullBreak and inDiscount and (not requireFVG or freshBullFVG) and (not useHTF or htfBull) and inSession
-shortSignal = allowShorts and bearBreak and inPremium and (not requireFVG or freshBearFVG) and (not useHTF or htfBear) and inSession
+// Enter on the pullback after a structure shift armed the side.
+longSignal  = allowLongs and armedLong and inDiscount and (not requireFVG or freshBullFVG) and (not useHTF or htfBull) and inSession
+shortSignal = allowShorts and armedShort and inPremium and (not requireFVG or freshBearFVG) and (not useHTF or htfBear) and inSession
 
 // Initial stop prices computed at signal time
 longStop  = stopMode == "ATR" ? close - atr * atrMult : (na(lower) ? close - atr * atrMult : lower - atr * structBuf)
@@ -150,12 +161,14 @@ if longSignal and longRisk > 0 and strategy.position_size == 0
     entryPx  := close
     initRisk := longRisk
     workStop := longStop
+    armedLong := false
 
 if shortSignal and shortRisk > 0 and strategy.position_size == 0
     strategy.entry("PF Short", strategy.short, comment="PF Short")
     entryPx  := close
     initRisk := shortRisk
     workStop := shortStop
+    armedShort := false
 
 // ── Manage open long ──
 if strategy.position_size > 0 and not na(entryPx)
