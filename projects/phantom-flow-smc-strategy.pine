@@ -30,17 +30,17 @@ strategy("Phantom Flow SMC Strategy", overlay=true, initial_capital=50000,
 
 // Structure
 grpMS = "Market Structure"
-swingLength = input.int(10, "Swing Pivot Length", minval=2, maxval=50, group=grpMS)
+swingLength = input.int(5, "Swing Pivot Length", minval=2, maxval=50, group=grpMS)
 
 // Higher-Timeframe Trend Filter
 grpHTF = "HTF Trend Filter"
-useHTF      = input.bool(true, "Require HTF Trend Agreement", group=grpHTF, tooltip="Longs only when HTF close is above its EMA; shorts only when below.")
+useHTF      = input.bool(false, "Require HTF Trend Agreement", group=grpHTF, tooltip="Longs only when HTF close is above its EMA; shorts only when below.")
 htfTf       = input.timeframe("60", "HTF Timeframe", group=grpHTF)
 htfEmaLen   = input.int(50, "HTF EMA Length", minval=5, group=grpHTF)
 
 // Entry Filters
 grpEntry = "Entry Filters"
-useLocation = input.bool(true, "Require Discount/Premium Location", group=grpEntry, tooltip="Longs only in discount, shorts only in premium.")
+useLocation = input.bool(false, "Require Discount/Premium Location", group=grpEntry, tooltip="OFF = enter on the structure break (more trades). ON = wait for a pullback into discount (long) / premium (short) — more selective.")
 requireFVG  = input.bool(false, "Require Fresh FVG Confirmation", group=grpEntry)
 fvgAtrMult  = input.float(0.25, "Min FVG Size (× ATR)", minval=0.0, step=0.05, group=grpEntry)
 allowLongs  = input.bool(true, "Allow Longs", inline="dir", group=grpEntry)
@@ -48,9 +48,9 @@ allowShorts = input.bool(true, "Allow Shorts", inline="dir", group=grpEntry)
 
 // Session
 grpSess = "Session Filter"
-useSession   = input.bool(true, "Restrict to Session", group=grpSess)
+useSession   = input.bool(false, "Restrict to Session", group=grpSess, tooltip="OFF by default so it trades on any symbol/timezone. Turn ON for RTH-only (set the window to your exchange's session).")
 sessionWin   = input.session("0930-1600", "Session (exchange time)", group=grpSess)
-closeAtEnd   = input.bool(true, "Flatten at Session End", group=grpSess)
+closeAtEnd   = input.bool(false, "Flatten at Session End", group=grpSess)
 
 // Risk & Trade Management
 grpRisk = "Risk & Management"
