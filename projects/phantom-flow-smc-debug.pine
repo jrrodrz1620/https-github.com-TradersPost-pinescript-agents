@@ -1,0 +1,56 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Diagnostic build of the Phantom Flow SMC strategy
+// Implemented by Pine Script Development Assistant
+//
+// MINIMAL DEBUG STRATEGY — isolates "why no trades".
+// Stripped to the core: confirmed swing pivots → structure break → reverse.
+// No request.security (HTF), no partials, no breakeven, no session, no
+// location filter. If THIS produces trades, the culprit is one of the removed
+// features in the full strategy. If this ALSO shows zero trades, the issue is
+// the pivot/break detection or the symbol's data — not the strategy logic.
+
+//@version=6
+strategy("PF SMC Debug", overlay=true, initial_capital=50000,
+         default_qty_type=strategy.fixed, default_qty_value=1)
+
+swingLength = input.int(5, "Swing Pivot Length", minval=2, maxval=50)
+
+ph = ta.pivothigh(high, swingLength, swingLength)
+pl = ta.pivotlow(low, swingLength, swingLength)
+
+var float upper = na
+var float lower = na
+if not na(ph)
+    upper := ph
+if not na(pl)
+    lower := pl
+
+bullBreak = not na(upper) and close > upper and close[1] <= upper
+bearBreak = not na(lower) and close < lower and close[1] >= lower
+
+// Reverse on each break — guarantees closed trades whenever structure breaks.
+if bullBreak
+    strategy.entry("Long", strategy.long)
+if bearBreak
+    strategy.entry("Short", strategy.short)
+
+plotshape(bullBreak, title="Break Up",   style=shape.triangleup,   location=location.belowbar, color=color.lime, size=size.small)
+plotshape(bearBreak, title="Break Down",  style=shape.triangledown, location=location.abovebar, color=color.red,  size=size.small)
+plot(upper, "Upper", color=color.new(color.red, 50))
+plot(lower, "Lower", color=color.new(color.green, 50))
+
+// On-chart counters so you can SEE whether breaks are being detected at all.
+var int nUp = 0
+var int nDn = 0
+if bullBreak
+    nUp += 1
+if bearBreak
+    nDn += 1
+var table t = table.new(position.top_right, 2, 3, border_width=1)
+if barstate.islast
+    table.cell(t, 0, 0, "PF Debug", text_color=color.white, bgcolor=color.new(color.blue, 30))
+    table.cell(t, 1, 0, "", bgcolor=color.new(color.blue, 30))
+    table.cell(t, 0, 1, "Up breaks",   text_color=color.white)
+    table.cell(t, 1, 1, str.tostring(nUp), text_color=color.white)
+    table.cell(t, 0, 2, "Down breaks", text_color=color.white)
+    table.cell(t, 1, 2, str.tostring(nDn), text_color=color.white)
