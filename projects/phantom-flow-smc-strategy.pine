@@ -20,9 +20,12 @@
 
 //@version=6
 strategy("Phantom Flow SMC Strategy", overlay=true, initial_capital=50000,
-         default_qty_type=strategy.fixed, default_qty_value=2,
+         default_qty_type=strategy.fixed, default_qty_value=1,
          commission_type=strategy.commission.cash_per_contract, commission_value=2.0,
          slippage=1, calc_on_every_tick=false, pyramiding=0)
+// NOTE: default quantity is 1 contract so it trades on any account size. The
+// partial-at-1R scale-out needs ≥2 contracts (you can't sell half of one
+// futures contract) — raise "Order Size" in Properties to 2+ before enabling it.
 
 // ============================================================================
 // INPUT SETTINGS
@@ -59,7 +62,7 @@ atrLength   = input.int(14, "ATR Length", minval=2, group=grpRisk)
 atrMult     = input.float(1.5, "ATR Stop Multiplier", minval=0.2, step=0.1, group=grpRisk)
 structBuf   = input.float(0.25, "Structure Stop Buffer (× ATR)", minval=0.0, step=0.05, group=grpRisk)
 rrRatio     = input.float(2.0, "Final Reward : Risk", minval=0.5, step=0.5, group=grpRisk)
-usePartial  = input.bool(true, "Take Partial at 1R", group=grpRisk, tooltip="Scale out half the position at +1R.")
+usePartial  = input.bool(false, "Take Partial at 1R", group=grpRisk, tooltip="Scale out half the position at +1R. Needs Order Size ≥ 2 contracts (Properties tab) — a single futures contract can't be partially closed.")
 partialPct  = input.float(50, "Partial Size (%)", minval=10, maxval=90, step=5, group=grpRisk)
 useBE       = input.bool(true, "Move Stop to Breakeven", group=grpRisk)
 beTrigger   = input.float(1.0, "Breakeven Trigger (R)", minval=0.2, step=0.1, group=grpRisk)
