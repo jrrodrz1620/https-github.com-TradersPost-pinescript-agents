@@ -28,8 +28,14 @@ if (-not $Prompt) {
 function Get-EnvValue([string]$Name) {
     $v = [Environment]::GetEnvironmentVariable($Name)
     if (-not $v -and (Test-Path ".env")) {
-        $line = Select-String -Path ".env" -Pattern "^$Name=" | Select-Object -First 1
-        if ($line) { $v = $line.Line.Split("=", 2)[1].Trim().Trim('"').Trim("'") }
+        foreach ($raw in Get-Content ".env") {
+            # Tolerate BOM, stray whitespace, and spaces around the equals sign
+            $line = $raw.Trim([char]0xFEFF).Trim()
+            if ($line -match "^$Name\s*=\s*(.*)$") {
+                $candidate = $Matches[1].Trim().Trim('"').Trim("'")
+                if ($candidate) { $v = $candidate; break }
+            }
+        }
     }
     return $v
 }

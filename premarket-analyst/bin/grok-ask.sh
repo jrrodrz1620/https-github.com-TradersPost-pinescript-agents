@@ -20,7 +20,8 @@ env_val() {
   local name="$1"
   local v="${!name:-}"
   if [ -z "$v" ] && [ -f .env ]; then
-    v="$(grep -E "^${name}=" .env | head -1 | cut -d= -f2-)"
+    # Tolerate stray whitespace and spaces around the equals sign
+    v="$(grep -E "^[[:space:]]*${name}[[:space:]]*=" .env | head -1 | sed -E 's/^[^=]*=[[:space:]]*//' | tr -d '"' | tr -d "'" | tr -d '\r')"
   fi
   echo "$v"
 }
