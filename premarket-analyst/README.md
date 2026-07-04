@@ -19,12 +19,29 @@ scan.py -> packet.json -> Claude -.
 | `demo_packet.py` | Writes a sample `packet.json` (same schema) for demos or sandboxes with no market data access |
 | `prompt_claude.md` | The analyst prompt (first brain) |
 | `prompt_grok.md` | The blind second brain prompt for Grok |
-| `bin/grok-ask.sh` | Shell wrapper that pipes a prompt to the xAI Grok API and prints only the answer (needs `XAI_API_KEY`) |
+| `bin/grok-ask.sh` | Shell wrapper (macOS/Linux) that pipes a prompt to the xAI Grok API and prints only the answer (needs `XAI_API_KEY`) |
+| `bin/grok-ask.ps1` | The same wrapper for Windows PowerShell |
 | `prompt_merge.md` | The editor prompt. Never averages the two brains |
 | `render_report.py` | `REPORT.md` to clean HTML in `reports/` |
 | `deliver.py` | Emails the HTML via Resend. Skips cleanly if keys are missing |
 
-## Run it
+## Run it on Windows (PowerShell)
+
+```powershell
+py -m venv .venv
+.venv\Scripts\pip install yfinance feedparser markdown requests tzdata
+.venv\Scripts\python scan.py                  # gathers live data into packet.json
+# run prompt_claude.md and prompt_grok.md against packet.json -> claude_view.md, grok_view.md
+#   Grok: Get-Content prompt_grok.md, packet.json -Raw | .\bin\grok-ask.ps1 | Out-File grok_view.md
+# run prompt_merge.md against all three -> REPORT.md
+$d = Get-Date -Format yyyy-MM-dd
+.venv\Scripts\python render_report.py REPORT.md $d
+.venv\Scripts\python deliver.py reports\premarket_$d.html $d
+```
+
+Note the extra `tzdata` package: Windows does not ship the IANA timezone database, and the scripts pin everything to America/New_York, so `tzdata` is required there (harmless elsewhere).
+
+## Run it on macOS / Linux
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install yfinance feedparser markdown requests
@@ -36,7 +53,7 @@ python3 -m venv .venv && .venv/bin/pip install yfinance feedparser markdown requ
 .venv/bin/python deliver.py reports/premarket_$(date +%F).html $(date +%F)
 ```
 
-Copy `.env.example` to `.env` and add `RESEND_API_KEY`, `EMAIL_TO`, and optionally `XAI_API_KEY`.
+Copy `.env.example` to `.env` and add `RESEND_API_KEY`, `EMAIL_TO`, and optionally `XAI_API_KEY`. On Windows: `Copy-Item .env.example .env`.
 
 ## Honest limitations
 
