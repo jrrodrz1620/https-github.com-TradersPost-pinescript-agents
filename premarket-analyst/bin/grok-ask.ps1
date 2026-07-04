@@ -1,6 +1,12 @@
-# grok-ask.ps1: send a prompt to xAI's Grok API and print ONLY the answer.
-# Usage: .\bin\grok-ask.ps1 "prompt"    or    Get-Content prompt.txt | .\bin\grok-ask.ps1
-# Needs XAI_API_KEY in the environment or in a local .env file.
+# grok-ask.ps1: send a prompt to the second brain and print ONLY the answer.
+# Usage: .\bin\grok-ask.ps1 "prompt"    or    $prompt | .\bin\grok-ask.ps1
+#
+# The second brain is any OpenAI-compatible chat API, configured in .env:
+#   SECOND_BRAIN_URL   (default https://api.x.ai/v1/chat/completions)
+#   SECOND_BRAIN_MODEL (default grok-4)
+#   SECOND_BRAIN_KEY   (falls back to XAI_API_KEY)
+# Works with xAI Grok, Google Gemini, Kimi/Moonshot, DeepSeek, OpenRouter,
+# Groq, Mistral. See .env.example for ready-made configs.
 
 param(
     [Parameter(Position = 0, ValueFromRemainingArguments = $true)]
@@ -19,24 +25,35 @@ if (-not $Prompt) {
     exit 1
 }
 
-$apiKey = $env:XAI_API_KEY
-if (-not $apiKey -and (Test-Path ".env")) {
-    $line = Select-String -Path ".env" -Pattern "^XAI_API_KEY=" | Select-Object -First 1
-    if ($line) { $apiKey = $line.Line.Split("=", 2)[1].Trim().Trim('"').Trim("'") }
+function Get-EnvValue([string]$Name) {
+    $v = [Environment]::GetEnvironmentVariable($Name)
+    if (-not $v -and (Test-Path ".env")) {
+        $line = Select-String -Path ".env" -Pattern "^$Name=" | Select-Object -First 1
+        if ($line) { $v = $line.Line.Split("=", 2)[1].Trim().Trim('"').Trim("'") }
+    }
+    return $v
 }
+
+$apiKey = Get-EnvValue "SECOND_BRAIN_KEY"
+if (-not $apiKey) { $apiKey = Get-EnvValue "XAI_API_KEY" }
+$url = Get-EnvValue "SECOND_BRAIN_URL"
+if (-not $url) { $url = "https://api.x.ai/v1/chat/completions" }
+$model = Get-EnvValue "SECOND_BRAIN_MODEL"
+if (-not $model) { $model = "grok-4" }
+
 if (-not $apiKey) {
-    Write-Error "grok-ask: XAI_API_KEY not set (env or .env), cannot reach Grok"
+    Write-Error "grok-ask: no API key. Set SECOND_BRAIN_KEY (or XAI_API_KEY) in .env"
     exit 1
 }
 
 $body = @{
-    model       = "grok-4"
+    model       = $model
     messages    = @(@{ role = "user"; content = $Prompt })
     temperature = 0.3
 } | ConvertTo-Json -Depth 6
 
 try {
-    $resp = Invoke-RestMethod -Uri "https://api.x.ai/v1/chat/completions" `
+    $resp = Invoke-RestMethod -Uri $url `
         -Method Post `
         -Headers @{ Authorization = "Bearer $apiKey" } `
         -ContentType "application/json" `
@@ -46,11 +63,11 @@ try {
     if ($answer) {
         Write-Output $answer
     } else {
-        Write-Error "grok-ask: no answer from Grok, raw response follows"
+        Write-Error "grok-ask: no answer from $model, raw response follows"
         Write-Error ($resp | ConvertTo-Json -Depth 6)
         exit 1
     }
 } catch {
-    Write-Error "grok-ask: request failed: $_"
+    Write-Error "grok-ask: request to $url failed: $_"
     exit 1
 }

@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
-# grok-ask.sh: send a prompt to xAI's Grok API and print ONLY the answer.
+# grok-ask.sh: send a prompt to the second brain and print ONLY the answer.
 # Usage: grok-ask.sh "prompt"   or   ... | grok-ask.sh
-# Needs XAI_API_KEY in the environment or in a local .env file.
+#
+# The second brain is any OpenAI-compatible chat API, configured in .env:
+#   SECOND_BRAIN_URL   (default https://api.x.ai/v1/chat/completions)
+#   SECOND_BRAIN_MODEL (default grok-4)
+#   SECOND_BRAIN_KEY   (falls back to XAI_API_KEY)
+# Works with xAI Grok, Google Gemini, Kimi/Moonshot, DeepSeek, OpenRouter,
+# Groq, Mistral. See .env.example for ready-made configs.
 set -uo pipefail
 
 if [ $# -ge 1 ]; then
@@ -10,25 +16,38 @@ else
   PROMPT="$(cat)"
 fi
 
-if [ -z "${XAI_API_KEY:-}" ] && [ -f .env ]; then
-  XAI_API_KEY="$(grep -E '^XAI_API_KEY=' .env | head -1 | cut -d= -f2-)"
-fi
-if [ -z "${XAI_API_KEY:-}" ]; then
-  echo "grok-ask: XAI_API_KEY not set (env or .env), cannot reach Grok" >&2
+env_val() {
+  local name="$1"
+  local v="${!name:-}"
+  if [ -z "$v" ] && [ -f .env ]; then
+    v="$(grep -E "^${name}=" .env | head -1 | cut -d= -f2-)"
+  fi
+  echo "$v"
+}
+
+API_KEY="$(env_val SECOND_BRAIN_KEY)"
+[ -z "$API_KEY" ] && API_KEY="$(env_val XAI_API_KEY)"
+URL="$(env_val SECOND_BRAIN_URL)"
+[ -z "$URL" ] && URL="https://api.x.ai/v1/chat/completions"
+MODEL="$(env_val SECOND_BRAIN_MODEL)"
+[ -z "$MODEL" ] && MODEL="grok-4"
+
+if [ -z "$API_KEY" ]; then
+  echo "grok-ask: no API key. Set SECOND_BRAIN_KEY (or XAI_API_KEY) in .env" >&2
   exit 1
 fi
 
 LOG="$(mktemp)"
 RESP="$(mktemp)"
 
-curl -sS --max-time 300 https://api.x.ai/v1/chat/completions \
-  -H "Authorization: Bearer ${XAI_API_KEY}" \
+curl -sS --max-time 300 "$URL" \
+  -H "Authorization: Bearer ${API_KEY}" \
   -H "Content-Type: application/json" \
-  -d "$(python3 -c '
-import json, sys
+  -d "$(MODEL="$MODEL" python3 -c '
+import json, os, sys
 prompt = sys.stdin.read()
 print(json.dumps({
-    "model": "grok-4",
+    "model": os.environ["MODEL"],
     "messages": [{"role": "user", "content": prompt}],
     "temperature": 0.3,
 }))
@@ -46,7 +65,7 @@ except Exception:
 if [ -n "$ANSWER" ]; then
   echo "$ANSWER"
 else
-  echo "grok-ask: no answer from Grok, raw response and log follow" >&2
+  echo "grok-ask: no answer from ${MODEL}, raw response and log follow" >&2
   cat "$RESP" >&2
   cat "$LOG" >&2
   exit 1
