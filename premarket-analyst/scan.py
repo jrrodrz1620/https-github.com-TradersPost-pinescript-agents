@@ -244,7 +244,7 @@ def get_econ_calendar():
     raw, fetched_at = None, None
 
     if os.path.exists(ECON_CACHE):
-        cached = safe(lambda: json.load(open(ECON_CACHE)), label="econ cache read")
+        cached = safe(lambda: json.load(open(ECON_CACHE, encoding="utf-8")), label="econ cache read")
         if cached and time.time() - cached.get("fetched_at", 0) < ECON_CACHE_TTL:
             raw, fetched_at = cached["events"], cached["fetched_at"]
             log("  using cached weekly feed")
@@ -258,9 +258,9 @@ def get_econ_calendar():
         if raw is not None:
             fetched_at = time.time()
             safe(lambda: json.dump({"fetched_at": fetched_at, "events": raw},
-                                   open(ECON_CACHE, "w")), label="econ cache write")
+                                   open(ECON_CACHE, "w", encoding="utf-8")), label="econ cache write")
         else:
-            cached = safe(lambda: json.load(open(ECON_CACHE)), label="econ cache fallback")
+            cached = safe(lambda: json.load(open(ECON_CACHE, encoding="utf-8")), label="econ cache fallback")
             if cached:
                 raw, fetched_at = cached["events"], cached["fetched_at"]
                 note = "live fetch failed, using stale cached week"
@@ -509,7 +509,9 @@ def main():
         ],
     }
 
-    with open("packet.json", "w") as f:
+    # Explicit UTF-8 everywhere: Windows defaults to cp1252 and chokes on
+    # emoji and curly quotes in headlines.
+    with open("packet.json", "w", encoding="utf-8") as f:
         json.dump(packet, f, indent=2, default=str)
     log(f"WROTE packet.json ({len(gappers)} gappers, "
         f"{len(econ.get('today', []))} econ events today, {len(market_news)} news items)")

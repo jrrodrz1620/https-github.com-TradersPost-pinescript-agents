@@ -22,7 +22,7 @@ def load_env(path=".env"):
     """Tiny KEY=VALUE parser. Environment variables take precedence."""
     values = {}
     if os.path.exists(path):
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith("#") or "=" not in line:
@@ -49,7 +49,7 @@ def main():
         print("[deliver] email skipped, set RESEND_API_KEY + EMAIL_TO (in .env or the environment)")
         sys.exit(0)
 
-    with open(html_path) as f:
+    with open(html_path, encoding="utf-8") as f:
         html = f.read()
 
     resp = requests.post(

@@ -170,6 +170,6 @@ packet = {
     ],
 }
 
-with open("packet.json", "w") as f:
+with open("packet.json", "w", encoding="utf-8") as f:
     json.dump(packet, f, indent=2)
 print(f"[demo] WROTE packet.json (demo fixture, {len(packet['gappers'])} gappers)")

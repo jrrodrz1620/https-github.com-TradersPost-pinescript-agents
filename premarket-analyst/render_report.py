@@ -95,7 +95,7 @@ def main():
     md_path = sys.argv[1]
     date = sys.argv[2] if len(sys.argv) > 2 else str(datetime.now(ZoneInfo("America/New_York")).date())
 
-    with open(md_path) as f:
+    with open(md_path, encoding="utf-8") as f:
         body = markdown.markdown(f.read(), extensions=["tables", "fenced_code", "sane_lists"])
 
     html = f"""<!DOCTYPE html>
@@ -125,7 +125,7 @@ def main():
 
     os.makedirs("reports", exist_ok=True)
     out = os.path.join("reports", f"premarket_{date}.html")
-    with open(out, "w") as f:
+    with open(out, "w", encoding="utf-8") as f:
         f.write(html)
     print(f"[render] wrote {out}")
     return out
