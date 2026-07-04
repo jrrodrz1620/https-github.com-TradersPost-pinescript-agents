@@ -32,8 +32,9 @@ function Get-EnvValue([string]$Name) {
             # Tolerate BOM, stray whitespace, and spaces around the equals sign
             $line = $raw.Trim([char]0xFEFF).Trim()
             if ($line -match "^$Name\s*=\s*(.*)$") {
+                # Last non-empty match wins, so appending a corrected line fixes a bad one
                 $candidate = $Matches[1].Trim().Trim('"').Trim("'")
-                if ($candidate) { $v = $candidate; break }
+                if ($candidate) { $v = $candidate }
             }
         }
     }
