@@ -74,6 +74,15 @@ try {
         exit 1
     }
 } catch {
-    Write-Error "grok-ask: request to $url failed: $_"
+    # Windows PowerShell hides HTTP error bodies; dig the real message out
+    $detail = $_.ErrorDetails.Message
+    if (-not $detail -and $_.Exception.Response) {
+        try {
+            $stream = $_.Exception.Response.GetResponseStream()
+            $reader = New-Object System.IO.StreamReader($stream)
+            $detail = $reader.ReadToEnd()
+        } catch {}
+    }
+    Write-Error "grok-ask: request to $url failed: $_`n$detail"
     exit 1
 }
