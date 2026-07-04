@@ -3,9 +3,16 @@
 # Linux box (DigitalOcean droplet) running from cron before the open.
 #
 # Needs: .venv set up, .env filled in, claude CLI logged in (brain 1),
-# XAI_API_KEY in .env for Grok (brain 2, optional but recommended).
+# SECOND_BRAIN_KEY in .env for the second brain (brain 2, e.g. Gemini free
+# tier), optional but recommended.
 set -uo pipefail
 cd "$(dirname "$0")"
+
+# Cron runs with a minimal PATH and no HOME, so claude (and node) go missing.
+# Put the usual install locations back so the CLI is found and can read its
+# saved login.
+export HOME="${HOME:-/root}"
+export PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 D=$(TZ=America/New_York date +%F)
 log() { echo "[$(TZ=America/New_York date +%H:%M:%S)] $*"; }
@@ -21,12 +28,12 @@ else
   log "warn: claude CLI not found, skipping brain 1"
 fi
 
-log "3/6 brain 2: Grok blind pass"
+log "3/6 brain 2: second brain (Gemini) blind pass"
 if { cat prompt_grok.md; echo; echo "=== INPUT: packet.json ==="; cat packet.json; } | bin/grok-ask.sh > grok_view.md.tmp; then
   mv grok_view.md.tmp grok_view.md
 else
   rm -f grok_view.md.tmp
-  log "warn: Grok unreachable, continuing single-brain (merge will say so)"
+  log "warn: second brain unreachable, continuing single-brain (merge will say so)"
 fi
 
 log "4/6 merge"
