@@ -14,13 +14,13 @@ Never average the two brains. Where they disagree, that gap is the signal. Stand
 
 # 🧠 AI PREMARKET REPORT
 
-### {{DATE}} · {{TIME_ET}} ET · Claude + Grok, independent passes
+### {{DATE}} · {{TIME_ET}} ET · Claude + Gemini, independent passes
 
 > **Disclaimer, the one liner:** the deterministic rules pick the watchlist, both AIs judge quality, and you make the trade. Not financial advice.
 
 ## Summary
 
-The tape in one line. The catch we are watching today. And a one line two brain verdict: where Claude and Grok landed together and where they split.
+The tape in one line. The catch we are watching today. And a one line two brain verdict: where Claude and Gemini landed together and where they split.
 
 ## 📊 Pre-Market Gappers
 
@@ -30,14 +30,14 @@ Every gapper that survived the scan filter, each with its full catalyst headline
 
 Names where `day_eligible` is true (Trend Join Long rules, see WATCHLIST_CRITERIA.md).
 
-| Ticker | Catalyst | Levels (live) | Plan (Trend Join) | 🤖 Grok | Conv. |
+| Ticker | Catalyst | Levels (live) | Plan (Trend Join) | 🤖 Gemini | Conv. |
 |--------|----------|---------------|-------------------|---------|-------|
 
 ## 📈 Notable Swing Watchlist
 
 Names where `swing_eligible` is true. Starter ideas only, swing management is still being built.
 
-| Ticker | Catalyst (headline) | Trend context | Idea | 🤖 Grok | Conv. |
+| Ticker | Catalyst (headline) | Trend context | Idea | 🤖 Gemini | Conv. |
 |--------|--------------------|---------------|------|---------|-------|
 
 ## 📉 Market Trends of the Day
@@ -65,10 +65,10 @@ Names that failed the screens or got flagged by either brain, each with the why.
 ## 🤖 Where the two brains landed
 
 - **Agreement:** the overlap, trade these.
-- **Rules vs discretion:** names Grok liked that the screen rejected, and why the screen said no.
+- **Rules vs discretion:** names Gemini liked that the screen rejected, and why the screen said no.
 - **Sharp catches:** the one thing each brain caught that the other missed.
 - Closing line: trade where they agree; where they disagree, stand down or size down; never average.
 
 ---
 
-*Generated {{DATE}} · Built by Claude + Grok · Educational only, not financial advice*
+*Generated {{DATE}} · Built by Claude + Gemini · Educational only, not financial advice*

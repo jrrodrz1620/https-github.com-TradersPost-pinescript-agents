@@ -116,7 +116,7 @@ def main():
 {body}
   </article>
   <footer class="report-footer">
-    Generated {date} · Built by Claude + Grok · Educational only, not financial advice
+    Generated {date} · Built by Claude + Gemini · Educational only, not financial advice
   </footer>
 </div>
 </body>
