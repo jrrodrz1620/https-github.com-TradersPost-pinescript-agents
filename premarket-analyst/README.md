@@ -32,7 +32,9 @@ py -m venv .venv
 .venv\Scripts\pip install yfinance feedparser markdown requests tzdata
 .venv\Scripts\python scan.py                  # gathers live data into packet.json
 # run prompt_claude.md and prompt_grok.md against packet.json -> claude_view.md, grok_view.md
-#   Grok: Get-Content prompt_grok.md, packet.json -Raw | .\bin\grok-ask.ps1 | Out-File grok_view.md
+#   Grok (needs XAI_API_KEY from console.x.ai in .env):
+#   $p = (Get-Content prompt_grok.md -Raw) + "`n=== INPUT: packet.json ===`n" + (Get-Content packet.json -Raw)
+#   .\bin\grok-ask.ps1 $p | Out-File grok_view.md -Encoding utf8
 # run prompt_merge.md against all three -> REPORT.md
 $d = Get-Date -Format yyyy-MM-dd
 .venv\Scripts\python render_report.py REPORT.md $d

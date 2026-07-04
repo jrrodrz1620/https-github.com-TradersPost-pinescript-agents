@@ -10,7 +10,9 @@ param(
 $ErrorActionPreference = "Stop"
 
 if (-not $Prompt) {
-    $Prompt = [Console]::In.ReadToEnd()
+    # Pipeline input first (PowerShell-to-PowerShell), raw stdin as fallback
+    $Prompt = ($input | Out-String)
+    if (-not $Prompt.Trim()) { $Prompt = [Console]::In.ReadToEnd() }
 }
 if (-not $Prompt) {
     Write-Error "grok-ask: no prompt given (argument or stdin)"
