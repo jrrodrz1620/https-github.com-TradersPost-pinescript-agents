@@ -1,0 +1,4 @@
+.venv/
+.env
+.ff_calendar_cache.json
+__pycache__/
